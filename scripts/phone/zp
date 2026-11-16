@@ -1,0 +1,6 @@
+#!/bin/bash
+# zp <cmd> [args]: the Zoom app on the phone, fast (see zphone.py for commands).
+# A resident server keeps the phone connection; the first call starts it,
+# `zp quit` stops it and restores the phone's animations.
+D="$(cd "$(dirname "$0")" && pwd)"
+DROID_MODULE="$D/zphone.py" exec "$D/dr" "$@"

@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation · Penguin for Zoom</title>
+<meta name="description" content="How to install Penguin for Zoom, sign in with Zoom, use it in meetings, troubleshoot it and remove it.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="./">Penguin <span>for Zoom</span></a>
+    <nav class="site" aria-label="Site">
+      <ul>
+        <li><a href="./">Home</a></li>
+        <li><a href="docs.html" aria-current="page">Documentation</a></li>
+        <li><a href="support.html">Support</a></li>
+        <li><a href="privacy.html">Privacy</a></li>
+        <li><a href="terms.html">Terms</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+    <h1>Documentation</h1>
+    <p class="lead">How to install Penguin for Zoom, connect it to your Zoom account, use it in meetings, fix common problems, and remove it.</p>
+
+    <div class="notice" role="note">
+      <p>Penguin for Zoom is an independent app, not made, endorsed or supported by Zoom Communications, Inc. Zoom is a trademark of Zoom Communications, Inc. For help with this app, see <a href="support.html">Support</a>.</p>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <ol>
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#install">Install the app</a></li>
+        <li><a href="#add">Add the app to your Zoom account (sign in)</a></li>
+        <li><a href="#use">Use the app</a></li>
+        <li><a href="#keys">Keyboard keys</a></li>
+        <li><a href="#hyprland">Desktop-wide keys (Hyprland)</a></li>
+        <li><a href="#settings">Settings</a></li>
+        <li><a href="#data">How your data is handled</a></li>
+        <li><a href="#remove">Remove the app</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#contact">Contact support</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="prerequisites">1. Prerequisites</h2>
+    <ul>
+      <li>Arch Linux or an Arch-based distribution.</li>
+      <li>WebKitGTK 4.1, GTK 3 and GStreamer plugins (installed automatically as package dependencies).</li>
+      <li>PipeWire (with its PulseAudio compatibility) or PulseAudio, for sound and speaker choice.</li>
+      <li>For screen sharing on Wayland: <code>xdg-desktop-portal</code> with a backend for your desktop (for example <code>xdg-desktop-portal-hyprland</code>).</li>
+      <li>A Zoom account (free or paid). The app joins meetings as you.</li>
+    </ul>
+
+    <h2 id="install">2. Install the app</h2>
+    <ol>
+      <li>Download the latest package (<code>penguin-zoom-*.pkg.tar.zst</code>) from the <a href="https://github.com/vaknin/penguin-zoom/releases">releases page</a>.</li>
+      <li>Install it:
+<pre><code>sudo pacman -U penguin-zoom-*.pkg.tar.zst</code></pre></li>
+      <li>Start <strong>Penguin for Zoom</strong> from your app launcher, or run <code>penguin-zoom</code> in a terminal. The window says "Open a Zoom link to join".</li>
+      <li>Optional: make Penguin open Zoom meeting links. The package registers it for <code>zoommtg://</code> and <code>zoomus://</code> links; if links still open another Zoom app, run:
+<pre><code>xdg-mime default penguin-zoom.desktop x-scheme-handler/zoommtg x-scheme-handler/zoomus</code></pre></li>
+    </ol>
+    <p>If something goes wrong, see <a href="#troubleshooting">Troubleshooting</a>.</p>
+
+    <h2 id="add">3. Add the app to your Zoom account (sign in)</h2>
+    <p>Zoom requires apps like Penguin to join meetings as a signed-in Zoom user, so sign in once each time you start the app.</p>
+    <ol>
+      <li>Open Settings: press <kbd>,</kbd> or choose <strong>All settings</strong> in the Devices pop-up.</li>
+      <li>Under <strong>Account</strong>, choose <strong>Sign in</strong>.</li>
+      <li>Zoom's own sign-in page opens in the app window. Sign in with your Zoom account. We never see your password.</li>
+      <li>Zoom shows what the app asks for: a join token (ZAK) for your account and your basic profile. Choose <strong>Allow</strong>.</li>
+      <li>You return to the app, and Settings shows "Signed in as <em>your name</em>".</li>
+    </ol>
+    <p>The app keeps your sign-in only while it runs (nothing is saved to disk), so after you quit and restart it, sign in again. If sign-in fails, see <a href="#troubleshooting">Troubleshooting</a>.</p>
+
+    <h2 id="use">4. Use the app</h2>
+    <h3>Open a meeting</h3>
+    <ul>
+      <li><strong>Click a Zoom meeting link</strong> in your browser, email or chat. When the browser offers to open the Zoom app, the link opens in Penguin.</li>
+      <li><strong>Paste a link</strong>: copy a Zoom meeting link and press <kbd>Ctrl</kbd> <kbd>V</kbd> in the Penguin window.</li>
+      <li><strong>From a terminal</strong>: <code>penguin-zoom "https://zoom.us/j/123456789?pwd=…"</code>. If Penguin is already running, the link goes to the open window.</li>
+    </ul>
+    <p>The passcode in the link is used automatically.</p>
+
+    <h3>Join screen</h3>
+    <ul>
+      <li>See your camera preview and a microphone level meter.</li>
+      <li>Turn the microphone (<kbd>m</kbd>) and camera (<kbd>v</kbd>) on or off before joining.</li>
+      <li>Pick a camera, microphone and speaker with <strong>Devices</strong> (<kbd>d</kbd>), and play a test sound.</li>
+      <li>Type the name other participants will see in <strong>Join as</strong>; it is remembered for next time.</li>
+      <li>Choose <strong>Join</strong> (or press <kbd>Enter</kbd>). By joining you agree to Zoom's Terms of Service and Privacy Statement, linked under the button.</li>
+    </ul>
+
+    <h3>In the meeting</h3>
+    <ul>
+      <li><strong>Mute / Unmute</strong> your microphone, and <strong>Start / Stop video</strong>.</li>
+      <li><strong>Share</strong> your screen or a window. On Wayland your desktop asks which screen or window to share.</li>
+      <li><strong>Chat</strong>: read and send meeting chat. "Who can see your messages?" under the box shows who will receive them, including when the meeting is being recorded.</li>
+      <li><strong>People</strong>: the list of participants (a tab next to Chat).</li>
+      <li><strong>Gallery / Speaker view</strong>: switch between seeing everyone and seeing the active speaker.</li>
+      <li><strong>Devices</strong>: change camera, microphone or speaker during the meeting.</li>
+      <li><strong>Breakout rooms</strong>: when the host invites you, a bar offers <strong>Join</strong> or <strong>Later</strong>. In a room, <strong>Back to main session</strong> returns you. (Creating or managing rooms is not available.)</li>
+      <li><strong>Recording and app notices</strong>: Zoom's recording and consent notices appear as usual. The button at the top left shows which apps can access the meeting's content (Zoom's Active Apps Notifier).</li>
+      <li><strong>Leave</strong>: the red Leave button, <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd>, or closing the window.</li>
+    </ul>
+    <p>The control bar hides after a few idle seconds and returns when you move the mouse (you can turn this off in Settings).</p>
+
+    <h2 id="keys">5. Keyboard keys</h2>
+    <p>These work in the Penguin window when you are not typing in a text box, in both interface styles.</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">Key</th><th scope="col">Action</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>m</kbd></td><td>Mute or unmute the microphone (on the join screen: microphone on or off)</td></tr>
+        <tr><td><kbd>v</kbd></td><td>Camera on or off</td></tr>
+        <tr><td><kbd>s</kbd></td><td>Start or stop screen sharing</td></tr>
+        <tr><td><kbd>c</kbd></td><td>Open or close chat</td></tr>
+        <tr><td><kbd>p</kbd></td><td>Open or close the people list</td></tr>
+        <tr><td><kbd>g</kbd></td><td>Switch gallery and speaker view</td></tr>
+        <tr><td><kbd>d</kbd></td><td>Open or close the devices pop-up</td></tr>
+        <tr><td><kbd>,</kbd></td><td>Open Settings</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Close Settings, the devices pop-up or the side panel</td></tr>
+        <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd></td><td>Leave the meeting</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Join (on the join screen)</td></tr>
+        <tr><td><kbd>Ctrl</kbd> <kbd>V</kbd></td><td>Open a pasted meeting link (on the start screen)</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h2 id="hyprland">6. Desktop-wide keys (Hyprland)</h2>
+    <p>Mute or leave from anywhere on the desktop, even when Penguin is not focused. The app accepts these commands while it runs:</p>
+<pre><code>penguin-zoom --cmd mute-toggle
+penguin-zoom --cmd camera-toggle
+penguin-zoom --cmd leave
+penguin-zoom --cmd raise</code></pre>
+    <p>Suggested Hyprland bindings (classic <code>hyprland.conf</code> syntax; the package also ships a snippet in <code>/usr/share/penguin-zoom/</code>):</p>
+<pre><code>bind = SUPER SHIFT, M, exec, penguin-zoom --cmd mute-toggle
+bind = SUPER SHIFT, L, exec, penguin-zoom --cmd leave</code></pre>
+    <p><kbd>Super</kbd> <kbd>Shift</kbd> <kbd>M</kbd> mutes or unmutes; <kbd>Super</kbd> <kbd>Shift</kbd> <kbd>L</kbd> leaves the meeting. Other desktops can bind the same commands in their own shortcut settings.</p>
+
+    <h2 id="settings">7. Settings</h2>
+    <ul>
+      <li><strong>Interface style</strong>: Standard (a floating control bar with labels) or Keyboard (key hints instead of buttons). All keys work in both.</li>
+      <li><strong>Join with microphone muted</strong> (on by default) and <strong>Join with camera off</strong>.</li>
+      <li><strong>Hide controls when idle</strong>.</li>
+      <li><strong>Follow the desktop theme</strong>: use your Omarchy theme colours, if you use Omarchy.</li>
+      <li><strong>Speaker</strong>: chosen in Devices; Penguin sends its sound to that output without changing your system default.</li>
+      <li><strong>Account</strong>: sign in or sign out of Zoom.</li>
+    </ul>
+    <p>Settings are saved in <code>~/.config/penguin-zoom/settings.json</code> on your computer.</p>
+
+    <h2 id="data">8. How your data is handled</h2>
+    <ul>
+      <li>Meeting audio, video, screen share and chat go directly between your computer and Zoom. Penguin does not record or store them.</li>
+      <li>Your settings and display name are stored only on your computer.</li>
+      <li>Your Zoom sign-in tokens are kept only in the running app's memory and are never written to disk.</li>
+      <li>To join, the app asks our signing service for a join signature, sending the meeting number and role (and, only when joining as host, your access token for a one-time check). The service stores none of it.</li>
+      <li>No analytics, tracking, cookies or ads.</li>
+    </ul>
+    <p>Full details: <a href="privacy.html">Privacy policy</a>.</p>
+
+    <h2 id="remove">9. Remove the app</h2>
+    <p>Do any or all of these, in this order:</p>
+    <ol>
+      <li><strong>Sign out</strong>: Settings (<kbd>,</kbd>) → Account → <strong>Sign out</strong>. This revokes the app's access token with Zoom and clears it from memory.</li>
+      <li><strong>Remove the app from your Zoom account</strong>: sign in at <a href="https://marketplace.zoom.us/user/installed">marketplace.zoom.us/user/installed</a>, find <strong>Penguin for Zoom</strong>, and choose <strong>Remove</strong>. This cancels all access the app had to your account, even on other computers.</li>
+      <li><strong>Uninstall the program</strong>:
+<pre><code>sudo pacman -R penguin-zoom</code></pre></li>
+      <li><strong>Delete your settings</strong> (optional; pacman leaves them in your home folder):
+<pre><code>rm -r ~/.config/penguin-zoom</code></pre></li>
+      <li>If you added Hyprland bindings or changed the link handler, remove those lines from your Hyprland config, and set your previous Zoom app as the handler again, for example <code>xdg-mime default Zoom.desktop x-scheme-handler/zoommtg x-scheme-handler/zoomus</code>.</li>
+    </ol>
+    <h3>What removal means</h3>
+    <ul>
+      <li>After you sign out or remove the app from your Zoom account, Penguin can no longer join meetings as you until you sign in and allow it again.</li>
+      <li>If you are in a meeting, quitting or uninstalling the app leaves it.</li>
+      <li>Nothing in your Zoom account changes: your meetings, recordings, contacts and settings at Zoom are untouched.</li>
+    </ul>
+    <h3>Your data after removal</h3>
+    <ul>
+      <li>We hold no data about you, so there is nothing for us to delete. When you remove the app from your Zoom account, Zoom notifies our signing service, which stores nothing and has nothing to delete.</li>
+      <li>Tokens disappear when the app quits or you sign out.</li>
+      <li>Your settings file stays on your computer until you delete it (step 4).</li>
+      <li>Data Zoom holds about your meetings is handled under Zoom's <a href="https://www.zoom.com/en/trust/privacy/privacy-statement/">Privacy Statement</a>.</li>
+    </ul>
+    <p>There are no other app-specific removal steps.</p>
+
+    <h2 id="troubleshooting">10. Troubleshooting</h2>
+    <h3>Installing</h3>
+    <ul>
+      <li><strong>pacman reports missing dependencies</strong>: update your system first (<code>sudo pacman -Syu</code>), then install again.</li>
+      <li><strong>The window opens blank</strong>: start <code>penguin-zoom</code> from a terminal and read the messages. Make sure WebKitGTK 4.1 (<code>webkit2gtk-4.1</code>) is installed and up to date.</li>
+      <li><strong>Clicking a meeting link opens another Zoom app</strong>: set Penguin as the handler (step 4 of <a href="#install">Install</a>).</li>
+    </ul>
+    <h3>Signing in</h3>
+    <ul>
+      <li><strong>Sign-in page does not load</strong>: check your internet connection and that nothing else on your computer uses port 53682.</li>
+      <li><strong>"Signed in" disappears after a restart</strong>: expected. Sign-in is kept only in memory; sign in again.</li>
+      <li><strong>Your organisation blocks the app</strong>: some Zoom accounts only allow apps an admin has approved. Ask your Zoom admin.</li>
+    </ul>
+    <h3>Joining</h3>
+    <ul>
+      <li><strong>"That doesn't look like a Zoom meeting link"</strong>: copy the full link (it contains <code>/j/</code> and a number), or the meeting number.</li>
+      <li><strong>Joining fails with an error</strong>: sign in first (see <a href="#add">Add the app</a>), check the passcode, and check that the meeting has started or that the host lets participants join before them.</li>
+      <li><strong>Waiting room</strong>: the host has to admit you.</li>
+    </ul>
+    <h3>Audio, video and sharing</h3>
+    <ul>
+      <li><strong>No camera or microphone</strong>: open Devices (<kbd>d</kbd>) and pick the right device; check no other app holds the camera.</li>
+      <li><strong>No sound</strong>: open Devices, pick your speaker and use the test sound. Speaker choice needs PipeWire with PulseAudio compatibility (<code>pipewire-pulse</code>) or PulseAudio.</li>
+      <li><strong>Screen sharing does nothing on Wayland</strong>: install and run <code>xdg-desktop-portal</code> and the backend for your desktop.</li>
+      <li><strong>Some Zoom features are missing</strong>: see the FAQ below.</li>
+    </ul>
+    <h3>Desktop keys</h3>
+    <ul>
+      <li><strong>Super+Shift+M does nothing</strong>: Penguin must be running. Run <code>penguin-zoom --cmd mute-toggle</code> in a terminal to test; it exits with an error if the app is not running. Check the binding is not used by something else.</li>
+    </ul>
+    <p>Still stuck? <a href="support.html">Contact support</a>.</p>
+
+    <h2 id="faq">11. FAQ</h2>
+    <h3>Is this the official Zoom app?</h3>
+    <p>No. Penguin is an independent app that uses Zoom's Meeting SDK. It is not made, endorsed or supported by Zoom.</p>
+    <h3>Does it cost anything?</h3>
+    <p>No. You need a Zoom account, which can be a free one.</p>
+    <h3>Which Zoom features are not included?</h3>
+    <p>Penguin is deliberately light. It does not include whiteboards, polls, recording controls, virtual backgrounds, creating or managing breakout rooms, or Zoom's other apps. Use Zoom's own apps for those.</p>
+    <h3>Does Penguin record meetings or keep chat?</h3>
+    <p>No. It does not record, store or upload meeting content.</p>
+    <h3>Why do I have to sign in?</h3>
+    <p>Zoom requires apps built on its Meeting SDK to join meetings as a signed-in Zoom user.</p>
+    <h3>Will I get emails from you?</h3>
+    <p>No. We don't collect your email address and send no emails, except replies to messages you send us.</p>
+    <h3>Does it work outside Hyprland?</h3>
+    <p>Yes, on any Linux desktop where WebKitGTK runs. It is tested on Wayland with Hyprland.</p>
+
+    <h2 id="contact">12. Contact support</h2>
+    <p>Support hours: Sunday to Thursday, 09:00–18:00 Israel time. We aim to reply within 3 business days. Open an issue on <a href="https://github.com/vaknin/penguin-zoom/issues">GitHub</a> or email dibs.apps@gmail.com. Details on the <a href="support.html">support page</a>.</p>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <ul>
+      <li><a href="./">Home</a></li>
+      <li><a href="support.html">Support</a></li>
+      <li><a href="privacy.html">Privacy</a></li>
+      <li><a href="terms.html">Terms</a></li>
+    </ul>
+    <p>Penguin for Zoom is made by Aviv Vaknin, an independent developer. It is not affiliated with, endorsed or supported by Zoom Communications, Inc. Zoom is a trademark of Zoom Communications, Inc.</p>
+  </div>
+</footer>
+</body>
+</html>

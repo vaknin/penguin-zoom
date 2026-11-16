@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Penguin for Zoom
+GenericName=Video meetings
+Comment=Join Zoom meetings in a light Linux window
+Exec=penguin-zoom %u
+Icon=penguin-zoom
+Terminal=false
+Categories=Network;VideoConference;
+StartupWMClass=penguin-zoom
+MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;

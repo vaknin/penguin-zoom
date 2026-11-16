@@ -1,0 +1,28 @@
+#!/bin/bash
+# dr <cmd> [args]: client for a resident droid server (droid.py or an app
+# module built on it). The first call starts the server; `dr quit` stops it
+# (and restores the phone's animations); `dr serve` runs it in the foreground.
+#
+# Point it at an app module with DROID_MODULE=/path/to/app.py and
+# DROID_SOCK=$XDG_RUNTIME_DIR/<name>.sock (default: droid.py, droid.sock).
+D="$(cd "$(dirname "$0")" && pwd)"
+MOD="${DROID_MODULE:-$D/droid.py}"
+export DROID_SOCK="${DROID_SOCK:-${XDG_RUNTIME_DIR:-/tmp}/$(basename "${MOD%.py}").sock}"
+SOCK="$DROID_SOCK"
+LOG="${SOCK%.sock}.log"
+SERVE=(uv run -q --with uiautomator2 python -I "$MOD" serve)
+up() { [ -S "$SOCK" ] && [ "$(echo ping | socat -t 2 - "UNIX-CONNECT:$SOCK" 2>/dev/null)" = rc=0 ]; }
+case "$1" in
+  quit)  up && echo quit | socat -t 30 - "UNIX-CONNECT:$SOCK" >/dev/null; exit 0 ;;
+  serve) exec "${SERVE[@]}" ;;
+esac
+if ! up; then
+  setsid "${SERVE[@]}" > "$LOG" 2>&1 < /dev/null &
+  for i in $(seq 150); do up && break; sleep 0.1; done
+  up || { echo "FAIL server did not start (see $LOG)"; exit 1; }
+fi
+out=$(printf '%q ' "$@" | socat -t 120 - "UNIX-CONNECT:$SOCK")
+rc=$(tail -1 <<<"$out")
+sed '$d' <<<"$out"
+[[ "$rc" =~ ^rc=([0-9]+)$ ]] && exit "${BASH_REMATCH[1]}"
+echo "FAIL no reply from server (see $LOG)"; exit 1

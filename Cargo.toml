@@ -1,0 +1,28 @@
+[package]
+name = "penguin-zoom"
+version = "0.1.0"
+edition = "2024"
+description = "Penguin for Zoom: a Linux meeting client built on the Zoom Meeting SDK for Web, in a WebKitGTK window"
+
+[dependencies]
+wry = "0.57"
+tao = "0.37"
+webkit2gtk = "2.0"
+gtk = "0.18"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "process", "time", "io-util", "fs"] }
+axum = { version = "0.8", features = ["ws"] }
+tower-http = { version = "0.6", features = ["fs", "set-header"] }
+reqwest = { version = "0.13", features = ["json", "form"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+hmac = "0.13"
+base64 = "0.23"
+getrandom = "0.4"
+url = "2"
+tokio-stream = { version = "0.1", features = ["sync"] }
+ashpd = { version = "0.14", default-features = false, features = ["tokio", "screencast"] }
+gstreamer = "0.25"
+gstreamer-app = "0.25"
+futures-util = "0.3.34"
+

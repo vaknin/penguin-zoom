@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy · Penguin for Zoom</title>
+<meta name="description" content="How Penguin for Zoom collects, uses, shares and keeps personal information, and how to exercise your rights.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="./">Penguin <span>for Zoom</span></a>
+    <nav class="site" aria-label="Site">
+      <ul>
+        <li><a href="./">Home</a></li>
+        <li><a href="docs.html">Documentation</a></li>
+        <li><a href="support.html">Support</a></li>
+        <li><a href="privacy.html" aria-current="page">Privacy</a></li>
+        <li><a href="terms.html">Terms</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+    <h1>Privacy Policy</h1>
+    <p class="meta">Effective date: 15 November 2026 · Last updated: 15 November 2026</p>
+
+    <div class="notice" role="note">
+      <p><strong>Short version.</strong> Penguin for Zoom keeps its settings on your computer. Your meeting audio, video, screen share and chat go directly between your computer and Zoom; we never see them. Our only server creates the join signature Zoom requires and keeps nothing about you after the request. No analytics, no cookies, no tracking, no ads, and we never sell or share your data.</p>
+    </div>
+
+    <nav class="toc" aria-label="On this page">
+      <ol>
+        <li><a href="#who">Who we are</a></li>
+        <li><a href="#scope">What this policy covers</a></li>
+        <li><a href="#inventory">What data is involved, and where it goes</a></li>
+        <li><a href="#zoom">Data the app gets from Zoom</a></li>
+        <li><a href="#signer">Our signing service</a></li>
+        <li><a href="#purposes">Why we use data, and legal bases</a></li>
+        <li><a href="#sharing">Who we share data with</a></li>
+        <li><a href="#retention">How long data is kept</a></li>
+        <li><a href="#removal">After you remove the app</a></li>
+        <li><a href="#security">Security</a></li>
+        <li><a href="#rights">Your rights and how to use them</a></li>
+        <li><a href="#transfers">International transfers</a></li>
+        <li><a href="#children">Children</a></li>
+        <li><a href="#changes">Changes to this policy</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ol>
+    </nav>
+
+    <h2 id="who">1. Who we are</h2>
+    <p>Penguin for Zoom ("the app", "Penguin") is made and run by Aviv Vaknin, an independent developer (GitHub user <a href="https://github.com/vaknin">vaknin</a>), referred to here as "we" or "us". We are the controller of the personal information described in this policy that our signing service and support channels process. Contact: dibs.apps@gmail.com.</p>
+    <p>Penguin is not made, endorsed or supported by Zoom Communications, Inc. ("Zoom"). Zoom is a trademark of Zoom Communications, Inc.</p>
+
+    <h2 id="scope">2. What this policy covers</h2>
+    <p>This policy covers the Penguin for Zoom desktop app, the signing service we run for it, this website, and our support channels.</p>
+    <p>It does not cover Zoom. When you join a meeting, Zoom processes your meeting data (audio, video, screen share, chat, name, and so on) under its own <a href="https://www.zoom.com/en/trust/privacy/privacy-statement/">Privacy Statement</a> and <a href="https://www.zoom.com/en/trust/terms/">Terms of Service</a>. The meeting host's settings (for example recording) are controlled by the host and Zoom, not by us.</p>
+
+    <h2 id="inventory">3. What data is involved, and where it goes</h2>
+    <div class="table-wrap">
+    <table>
+      <caption>Data inventory</caption>
+      <thead>
+        <tr><th scope="col">Data</th><th scope="col">Where it is kept</th><th scope="col">Who receives it</th><th scope="col">How long</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Settings: join muted, join with camera off, interface style, hide controls when idle, follow desktop theme, chosen speaker, and the display name you last joined with</td><td>Your computer only, in <code>~/.config/penguin-zoom/settings.json</code></td><td>Nobody. (The display name is sent to Zoom when you join; see next row.)</td><td>Until you change or delete the file</td></tr>
+        <tr><td>Display name you type on the join screen</td><td>Your settings file</td><td>Zoom, when you join, so other participants see it</td><td>On your computer: until you change it. At Zoom: per Zoom's policy</td></tr>
+        <tr><td>Meeting number and passcode (from the link you open)</td><td>App memory while it runs</td><td>Zoom (both, to join). Our signing service (meeting number only, see <a href="#signer">section 5</a>)</td><td>Gone when the app quits. Not stored by our signing service</td></tr>
+        <tr><td>Zoom sign-in tokens (OAuth access token and refresh token)</td><td>App memory only; never written to disk</td><td>Zoom's API. For joining as host only, the access token is sent to our signing service for a one-time check</td><td>Until you sign out or quit the app</td></tr>
+        <tr><td>Your name from your Zoom profile</td><td>App memory only</td><td>Nobody; shown to you in Settings</td><td>Until you sign out or quit the app</td></tr>
+        <tr><td>ZAK (Zoom's short-lived join token for your account)</td><td>App memory, for the few seconds of joining</td><td>Zoom (it goes back to Zoom to join the meeting as you)</td><td>Discarded after the join; it expires within minutes</td></tr>
+        <tr><td>Meeting audio, video, screen share, chat messages, participant list</td><td>Not stored by the app</td><td>Directly between your computer and Zoom. We never receive them</td><td>Not kept by us. At Zoom: per Zoom's policy</td></tr>
+        <tr><td>Camera and microphone preview on the join screen</td><td>Shown on your screen only</td><td>Nobody until you join</td><td>Not kept</td></tr>
+        <tr><td>Audio device list and speaker routing; desktop theme colours</td><td>Read from your computer when needed</td><td>Nobody</td><td>Not kept (except your speaker choice in settings)</td></tr>
+        <tr><td>Diagnostic messages the app prints (tokens and signatures are masked)</td><td>Your terminal or your system log, if your desktop captures it</td><td>Nobody; we only see them if you paste them into a support request</td><td>As your system keeps logs</td></tr>
+        <tr><td>Your IP address, when the app calls our signing service</td><td>Signing service memory</td><td>Nobody</td><td>Used only for rate limiting, in memory; never written to disk</td></tr>
+        <tr><td>Zoom's deauthorization notice (sent by Zoom when you remove the app from your Zoom account)</td><td>Not stored</td><td>Nobody</td><td>Not kept; we hold no account data to delete</td></tr>
+        <tr><td>What you send us for support (GitHub issue, email)</td><td>GitHub (issues are public) or our mailbox</td><td>GitHub, our email provider</td><td>As long as needed to help you; you can ask us to delete emails</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>The app runs a small web server for its own window. It listens only on <code>127.0.0.1</code> (your own computer), cannot be reached from the network, and refuses requests from other websites.</p>
+    <p>We do not collect analytics, telemetry or crash reports, and the app and this website set no cookies and contain no trackers or advertising.</p>
+
+    <h2 id="zoom">4. Data the app gets from Zoom</h2>
+    <p>Zoom requires apps like Penguin to join meetings as a signed-in Zoom user, so you sign in with your own Zoom account before joining. When you sign in, Zoom asks you to approve the app and gives it tokens for your account. The app asks Zoom only for:</p>
+    <ul>
+      <li><strong>A ZAK</strong> (scope <code>user:read:zak</code>): a short-lived token that lets the app join a meeting as you. It is fetched right before each join and handed back to Zoom.</li>
+      <li><strong>Your basic profile</strong> (scope <code>user:read:user</code>): used only to show "Signed in as <em>your name</em>" in Settings. Zoom's answer also contains other profile fields (such as your email address and account ID); the app keeps only your first and last name, in memory, and discards the rest.</li>
+    </ul>
+    <p>The app does not read your meetings list, contacts, recordings, chat history or any other Zoom data, and it does not change anything in your Zoom account.</p>
+    <p>Tokens are held only in the memory of the running app. They are not written to disk, so you sign in again after restarting the app. "Sign out" in Settings revokes the token with Zoom and clears it from memory.</p>
+
+    <h2 id="signer">5. Our signing service</h2>
+    <p>Zoom requires every join to carry a signature made with the app's secret key. To keep that key off your computer, a small service we run on Oracle Cloud (over HTTPS) creates it. For each join it receives:</p>
+    <ul>
+      <li>the meeting number and the role (participant or host), to put in the signature;</li>
+      <li>your IP address, as part of any internet connection; we use it only in memory to limit how often one address can ask for signatures;</li>
+      <li>only when you join as host: your Zoom access token, which the service sends to Zoom once to confirm you are signed in. It keeps a one-way hash of the token in memory for 5 minutes so it does not have to ask Zoom again for every request, and never keeps the token itself.</li>
+    </ul>
+    <p>The service does not store meeting numbers, tokens or IP addresses, keeps no request logs that identify you, and has no database of users.</p>
+    <p>When you remove the app from your Zoom account, Zoom sends the service a deauthorization notice. Because we store nothing about you, there is nothing to delete; the service acknowledges the notice and discards it.</p>
+
+    <h2 id="purposes">6. Why we use data, and legal bases</h2>
+    <ul>
+      <li><strong>To let you join meetings</strong> (meeting number, role, display name, tokens, ZAK): needed to provide the app you asked to use (performance of a contract).</li>
+      <li><strong>To protect the signing service from abuse</strong> (IP address in memory, token check): our legitimate interest in keeping the service available and secure.</li>
+      <li><strong>To answer support requests</strong> (what you send us): to provide the service you asked for, and our legitimate interest in fixing problems.</li>
+    </ul>
+    <p>We do not use any data for advertising, profiling, selling, or training machine-learning models, and we do not make automated decisions about you.</p>
+
+    <h2 id="sharing">7. Who we share data with</h2>
+    <ul>
+      <li><strong>Zoom Communications, Inc.</strong>: everything needed for the meeting goes to Zoom, as described above. See Zoom's <a href="https://www.zoom.com/en/trust/privacy/privacy-statement/">Privacy Statement</a>.</li>
+      <li><strong>Oracle (Oracle Cloud Infrastructure)</strong>: hosts our signing service. Network traffic passes through Oracle's infrastructure; Oracle acts as our hosting provider. See <a href="https://www.oracle.com/legal/privacy/">Oracle's privacy policies</a>.</li>
+      <li><strong>GitHub, Inc.</strong>: hosts this website (GitHub Pages), the source code, the package downloads and the issue tracker. GitHub may log visitors' IP addresses for security. See the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>.</li>
+      <li><strong>Our email provider</strong>, if you email us.</li>
+      <li><strong>Authorities</strong>, only if the law requires it.</li>
+    </ul>
+    <p>We do not sell personal information and do not share it for cross-context behavioural advertising, as those terms are used in the California Consumer Privacy Act (CCPA/CPRA).</p>
+
+    <h2 id="retention">8. How long data is kept</h2>
+    <ul>
+      <li>On your computer: settings until you change or delete them; tokens and your profile name until you sign out or quit.</li>
+      <li>On our signing service: nothing after the request finishes, except the 5-minute in-memory token hash for host joins. A restart clears all memory.</li>
+      <li>Support: GitHub issues stay public until closed or deleted; emails are deleted once no longer needed, or on request.</li>
+    </ul>
+
+    <h2 id="removal">9. After you remove the app</h2>
+    <p>When you sign out, remove the app from your Zoom account, or uninstall it, we hold no data about you to delete: our signing service never stored any. Your settings file stays on your computer until you delete it. How to do each of these is in the <a href="docs.html#remove">documentation</a>. Data that Zoom keeps about your meetings is handled by Zoom.</p>
+
+    <h2 id="security">10. Security</h2>
+    <p>All traffic to Zoom and to our signing service uses HTTPS. Sign-in uses OAuth with PKCE, so no app secret ships with the app. The app's local server only accepts requests from its own window. Tokens are kept in memory only and are masked in diagnostic output. No method is perfectly secure; please report security problems privately to dibs.apps@gmail.com rather than in a public issue.</p>
+
+    <h2 id="rights">11. Your rights and how to use them</h2>
+    <p>Depending on where you live (for example under the EU/UK GDPR, the Israeli Privacy Protection Law, or the CCPA/CPRA in California), you may have the right to:</p>
+    <ul>
+      <li>know what personal information we hold about you and get a copy (access and portability);</li>
+      <li>have it corrected or deleted;</li>
+      <li>object to or restrict how we use it;</li>
+      <li>withdraw consent where we rely on it;</li>
+      <li>not be discriminated against for using these rights;</li>
+      <li>complain to a data protection authority (for example the Israeli Privacy Protection Authority, or your local authority in the EU or UK).</li>
+    </ul>
+    <p>To make a request, email dibs.apps@gmail.com with the subject "Privacy request". We will answer within 30 days. Because the app keeps your data on your own computer and our service stores nothing, in most cases the answer is that we hold no data about you; you can delete the local data yourself as described in the <a href="docs.html#remove">documentation</a>. For data Zoom holds, contact Zoom as described in its Privacy Statement.</p>
+
+    <h2 id="transfers">12. International transfers</h2>
+    <p>We are based in Israel. Our signing service runs in an Oracle Cloud data centre in Israel Central (Jerusalem), and GitHub's servers are mainly in the United States. Data that passes through these services may therefore be processed outside your country. Where the law requires, we rely on appropriate safeguards such as adequacy decisions or standard contractual clauses offered by these providers.</p>
+
+    <h2 id="children">13. Children</h2>
+    <p>Penguin is not directed to children under 16, and we do not knowingly collect personal information from them. Zoom's own age rules also apply to Zoom accounts. If you believe a child has sent us personal information, contact us and we will delete it.</p>
+
+    <h2 id="changes">14. Changes to this policy</h2>
+    <p>If we change this policy, we will update the date at the top and keep the previous versions in the site's public history on GitHub. If a change affects what data we collect or how it is shared, we will also note it in the app's release notes before it takes effect.</p>
+
+    <h2 id="contact">15. Contact</h2>
+    <p>Aviv Vaknin · Email: dibs.apps@gmail.com · General questions: <a href="https://github.com/vaknin/penguin-zoom/issues">GitHub Issues</a> (public; do not post personal information there).</p>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <ul>
+      <li><a href="./">Home</a></li>
+      <li><a href="docs.html">Documentation</a></li>
+      <li><a href="support.html">Support</a></li>
+      <li><a href="terms.html">Terms</a></li>
+    </ul>
+    <p>Penguin for Zoom is made by Aviv Vaknin, an independent developer. It is not affiliated with, endorsed or supported by Zoom Communications, Inc. Zoom is a trademark of Zoom Communications, Inc.</p>
+  </div>
+</footer>
+</body>
+</html>

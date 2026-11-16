@@ -1,0 +1,47 @@
+# Caddy front for penguin-signer. Installed to /etc/caddy/Caddyfile by deploy.sh.
+#
+# SIGNER_HOST comes from /etc/caddy/penguin.env (written by deploy.sh). With no
+# domain yet, use the VM's public IP with dashes on sslip.io, e.g.
+# 203-0-113-7.sslip.io; it resolves to that IP, so Caddy can get a Let's
+# Encrypt certificate for it over HTTP-01/TLS-ALPN-01 (ports 80 and 443 open).
+#
+# No access log: Caddy's access logs contain client IPs and we don't keep them.
+
+{
+	servers {
+		timeouts {
+			read_header 5s
+			read_body 10s
+			write 15s
+			idle 60s
+		}
+	}
+}
+
+{$SIGNER_HOST} {
+	request_body {
+		max_size 4KB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+		Cross-Origin-Resource-Policy "same-origin"
+		Cache-Control "no-store"
+		-Server
+	}
+
+	@api path /v1/* /healthz
+	handle @api {
+		# Caddy replaces any client-sent X-Forwarded-For with the real peer
+		# address (no trusted_proxies configured), which the signer rate-limits on.
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	handle {
+		respond 404
+	}
+}

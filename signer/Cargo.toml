@@ -1,0 +1,32 @@
+[package]
+name = "penguin-signer"
+version = "0.1.0"
+edition = "2024"
+description = "Hosted Meeting SDK signature service for Penguin for Zoom"
+publish = false
+
+# Standalone crate: its own workspace root and Cargo.lock, independent of the
+# desktop app in the parent directory (which has no [workspace]).
+[workspace]
+
+[[bin]]
+name = "penguin-signer"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio", "matched-path"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
+tower-http = { version = "0.7", features = ["limit", "timeout"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hmac = "0.13"
+sha2 = "0.11"
+base64 = "0.23"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "std"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+strip = true

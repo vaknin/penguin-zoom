@@ -1,0 +1,11 @@
+/target
+/assets/zoom-sdk/
+**/target/
+__pycache__/
+*.pyc
+.env
+.env.*
+*.pem
+*.key
+*.p12
+.DS_Store

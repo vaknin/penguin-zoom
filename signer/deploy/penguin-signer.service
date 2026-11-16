@@ -1,0 +1,51 @@
+[Unit]
+Description=Penguin for Zoom signing service
+After=network-online.target
+Wants=network-online.target
+# Without secrets the binary exits with status 2; don't start at all then.
+ConditionPathExists=/etc/penguin-signer.env
+
+[Service]
+Type=exec
+User=signer
+Group=signer
+# Root-owned, mode 600: systemd reads it before dropping to User=signer.
+EnvironmentFile=/etc/penguin-signer.env
+ExecStart=/usr/local/bin/penguin-signer
+Restart=on-failure
+RestartSec=2s
+# Exit 2 = bad/missing config: restarting won't help.
+RestartPreventExitStatus=2
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+MemoryMax=128M
+TasksMax=64
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

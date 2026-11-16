@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penguin for Zoom</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body data-screen="idle" data-style="standard">
+
+<!-- Zoom's own rendering (component view). Our UI floats around it. -->
+<div id="zoomRoot" aria-label="Meeting video"></div>
+
+<!-- ============ No link yet ============ -->
+<section id="idle" class="screen">
+  <div class="idle-box">
+    <svg class="icon big" data-icon="video" aria-hidden="true"></svg>
+    <h1>Open a Zoom link to join</h1>
+    <p class="dim">Click a meeting link anywhere and it opens here. You can also paste one with <kbd>Ctrl</kbd> <kbd>V</kbd>.</p>
+  </div>
+</section>
+
+<!-- ============ Join ============ -->
+<section id="join" class="screen">
+  <div class="join-box">
+    <header class="join-head">
+      <h1 id="joinTitle">Meeting</h1>
+      <span id="joinSub" class="dim"></span>
+    </header>
+    <div class="preview">
+      <video id="previewVideo" autoplay muted playsinline></video>
+      <span id="previewOff" class="dim">Camera off</span>
+      <button id="previewResume" class="ghost" data-action="preview-resume" hidden>Show preview</button>
+      <div class="meter" aria-label="Microphone level"><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="row-buttons">
+      <button class="tile" id="joinMic" data-action="join-mic" aria-pressed="true"><svg class="icon" data-icon="mic" aria-hidden="true"></svg><span>Mic on</span></button>
+      <button class="tile" id="joinCam" data-action="join-cam" aria-pressed="true"><svg class="icon" data-icon="video" aria-hidden="true"></svg><span>Camera on</span></button>
+      <button class="tile" data-action="devices" aria-expanded="false"><svg class="icon" data-icon="sliders" aria-hidden="true"></svg><span>Devices</span></button>
+    </div>
+    <form id="joinForm" class="join-row">
+      <label class="name-field">Join as <input id="joinName" autocomplete="off" spellcheck="false" required></label>
+      <button class="primary" type="submit" id="joinBtn">Join</button>
+    </form>
+    <p class="legal">By clicking Join, you agree to Zoom's <a href="https://www.zoom.com/en/trust/terms/" target="_blank" rel="noopener">Terms of Service</a> and <a href="https://www.zoom.com/en/trust/privacy/privacy-statement/" target="_blank" rel="noopener">Privacy Statement</a>.</p>
+  </div>
+</section>
+
+<!-- ============ In meeting: overlays ============ -->
+<div id="meeting" class="screen">
+  <!-- keyboard style: status line -->
+  <div class="kb-status mono">
+    <span><span class="accent">●</span> <span id="kbTopic">meeting</span> · <span id="kbCount">0</span> people · <span id="kbView">gallery</span></span>
+    <span class="kb-flags"><span id="kbMic"></span><span id="kbCam"></span><span id="kbChat"></span></span>
+  </div>
+
+  <div id="toast" class="toast" role="alert" hidden></div>
+
+  <!-- Zoom's Active Apps Notifier must stay visible: opens Zoom's own panel. -->
+  <button id="aan" class="aan" data-action="aan" aria-label="See apps that are accessing your meeting content" title="Apps accessing this meeting">
+    <svg class="icon" data-icon="apps" aria-hidden="true"></svg>
+  </button>
+
+  <!-- side panel: chat + people -->
+  <aside id="panel" class="panel" aria-label="Chat and people" hidden>
+    <div class="panel-head">
+      <div class="seg" role="tablist">
+        <button role="tab" data-action="tab-chat" id="tabChat" aria-selected="true">Chat</button>
+        <button role="tab" data-action="tab-people" id="tabPeople" aria-selected="false">People</button>
+      </div>
+      <button class="icon-btn" data-action="panel-close" aria-label="Close panel"><svg class="icon" data-icon="x" aria-hidden="true"></svg></button>
+    </div>
+    <div id="chatView" class="chat">
+      <div id="chatList" class="chat-list"><p class="dim center" id="chatEmpty">No messages yet</p></div>
+      <!-- Zoom's required chat notice: persistent, above the text field. -->
+      <div class="notice">
+        <button class="notice-btn" data-action="notice" aria-expanded="false" id="noticeBtn">
+          <svg class="icon" data-icon="info" aria-hidden="true"></svg><span id="noticeText">Who can see your messages?</span>
+        </button>
+        <div class="notice-pop" id="noticePop" role="dialog" aria-label="Who can see your messages" hidden>
+          <p id="noticeBody1">Everyone in the meeting can see and save your messages with Everyone, and can share them with apps and others.</p>
+          <p>Only you and those you chat with can save your direct messages and share them with apps and others.</p>
+        </div>
+      </div>
+      <form id="chatForm" class="composer">
+        <input id="chatInput" placeholder="Message everyone" aria-label="Message" autocomplete="off">
+        <button class="icon-btn" type="submit" aria-label="Send"><svg class="icon" data-icon="send" aria-hidden="true"></svg></button>
+      </form>
+    </div>
+    <ul id="peopleList" class="people" hidden></ul>
+  </aside>
+
+  <!-- standard style: control bar -->
+  <nav id="pill" class="pill" aria-label="Meeting controls">
+    <button data-action="mute" id="btnMute"><svg class="icon" data-icon="mic" aria-hidden="true"></svg><span>Mute</span></button>
+    <button data-action="video" id="btnVideo"><svg class="icon" data-icon="video" aria-hidden="true"></svg><span>Start video</span></button>
+    <button data-action="share" id="btnShare"><svg class="icon" data-icon="share" aria-hidden="true"></svg><span>Share</span></button>
+    <button data-action="share-change" id="btnShareChange" title="Share a different screen or window (Shift+S)" hidden><svg class="icon" data-icon="swap" aria-hidden="true"></svg><span>Change</span></button>
+    <button data-action="chat" id="btnChat"><svg class="icon" data-icon="chat" aria-hidden="true"></svg><span>Chat</span><i class="dot" hidden></i></button>
+    <button data-action="layout" id="btnLayout"><svg class="icon" data-icon="speaker" aria-hidden="true"></svg><span>Speaker</span></button>
+    <button data-action="devices" id="btnDevices" aria-expanded="false"><svg class="icon" data-icon="sliders" aria-hidden="true"></svg><span>Devices</span></button>
+    <span class="sep"></span>
+    <button data-action="leave" class="leave"><svg class="icon" data-icon="leave" aria-hidden="true"></svg><span>Leave</span></button>
+  </nav>
+
+  <!-- keyboard style: key hints -->
+  <div class="kb-keys mono">
+    <span><b>m</b> mic</span><span><b>v</b> camera</span><span><b>s</b> share</span><span><b>S</b> share other</span><span><b>c</b> chat</span>
+    <span><b>p</b> people</span><span><b>g</b> gallery/speaker</span><span><b>d</b> devices</span><span><b>,</b> settings</span>
+    <span class="right"><b class="bad">ctrl+shift+l</b> leave</span>
+  </div>
+</div>
+
+<!-- devices popover (join screen and meeting) -->
+<div id="devices" class="popover" role="dialog" aria-label="Devices" hidden>
+  <div class="dev-group"><div class="dev-head"><span>CAMERA</span></div><div id="devCams"></div></div>
+  <div class="dev-group"><div class="dev-head"><span>MICROPHONE</span></div><div id="devMics"></div></div>
+  <div class="dev-group"><div class="dev-head"><span>SPEAKERS</span><button class="link" data-action="test-sound">Play test sound</button></div><div id="devSpk"></div></div>
+  <div class="dev-foot"><button class="link" data-action="settings">All settings</button></div>
+</div>
+
+<!-- ============ Settings ============ -->
+<section id="settings" class="overlay" aria-label="Settings" hidden>
+  <nav class="set-nav">
+    <span class="set-title">Settings</span>
+    <button class="ghost" data-action="settings-close">Done</button>
+  </nav>
+  <div class="set-main">
+    <section>
+      <h2>Interface style</h2>
+      <p class="dim">Keyboard swaps the control bar for key hints. Every key works in both.</p>
+      <div class="style-cards">
+        <button class="style-card" data-action="style-standard" id="styleStandard">
+          <span class="mini std"><i></i><i></i><b></b></span>
+          <span class="style-name">Standard <em class="accent small">Default</em></span>
+        </button>
+        <button class="style-card" data-action="style-keyboard" id="styleKeyboard">
+          <span class="mini kb mono"><u>● meeting · 24:07</u><i></i><i></i><u>m mic  v cam  d devices</u></span>
+          <span class="style-name">Keyboard</span>
+        </button>
+      </div>
+    </section>
+    <section>
+      <h2>When joining</h2>
+      <div class="switch-row"><span><span>Join with microphone muted</span><span class="dim small">Unmute when you are ready</span></span><button role="switch" class="switch" data-setting="joinMuted" aria-label="Join with microphone muted"></button></div>
+      <div class="switch-row"><span><span>Join with camera off</span><span class="dim small">The preview still shows before you join</span></span><button role="switch" class="switch" data-setting="joinCameraOff" aria-label="Join with camera off"></button></div>
+      <div class="switch-row"><span><span>Hide controls when idle</span><span class="dim small">They come back when the mouse moves</span></span><button role="switch" class="switch" data-setting="hideIdle" aria-label="Hide controls when idle"></button></div>
+      <div class="switch-row"><span><span>Follow the Omarchy theme</span><span class="dim small">Use the desktop colours</span></span><button role="switch" class="switch" data-setting="followTheme" aria-label="Follow the Omarchy theme"></button></div>
+    </section>
+    <section>
+      <h2>From anywhere on the desktop</h2>
+      <p class="dim">Add to <code>~/.config/hypr/bindings.lua</code>:</p>
+      <pre class="mono">o.bind("SUPER + SHIFT + M", "Zoom: mute/unmute", "penguin-zoom --cmd mute-toggle")
+o.bind("SUPER + SHIFT + L", "Zoom: leave meeting", "penguin-zoom --cmd leave")</pre>
+    </section>
+    <section>
+      <h2>Account</h2>
+      <div class="switch-row"><span><span id="acctLine">Not signed in</span><span class="dim small" id="acctHint"></span></span><button class="ghost" data-action="signin" id="acctBtn">Sign in</button></div>
+    </section>
+  </div>
+</section>
+
+<script src="/sdk/lib/vendor/react.min.js"></script>
+<script src="/sdk/lib/vendor/react-dom.min.js"></script>
+<script src="/sdk/lib/vendor/redux.min.js"></script>
+<script src="/sdk/lib/vendor/redux-thunk.min.js"></script>
+<script src="/sdk/lib/vendor/react-redux.min.js"></script>
+<script src="/sdk/lib/vendor/lodash.min.js"></script>
+<script src="/sdk/zoom-meeting-embedded-6.10.0.min.js"></script>
+<script src="/screencast.js"></script>
+<script src="/glue.js"></script>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

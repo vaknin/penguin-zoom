@@ -1,0 +1,121 @@
+#cloud-config
+# Penguin for Zoom signing service: first-boot setup for an Oracle Cloud
+# Always Free VM.Standard.A1.Flex (aarch64) on Canonical Ubuntu 24.04.
+# Paste into "Show advanced options > Management > Initialization script >
+# Paste cloud-init script" when creating the instance. Contains no secrets.
+#
+# Result: user `signer` (system, no login), Caddy from its official apt repo,
+# build tools + rustup (minimal) for the default `ubuntu` user, unattended
+# security upgrades with automatic reboot at 04:00, fail2ban on sshd,
+# SSH password login off, and TCP 80/443 open on the host firewall.
+# Progress: `sudo tail -f /var/log/cloud-init-output.log`; done when
+# /var/lib/penguin-signer/cloud-init.done exists.
+
+ssh_pwauth: false
+disable_root: true
+
+package_update: true
+package_upgrade: true
+packages:
+  - build-essential
+  - pkg-config
+  - cmake
+  - rsync
+  - curl
+  - ca-certificates
+  - gnupg
+  - debian-keyring
+  - debian-archive-keyring
+  - apt-transport-https
+  - unattended-upgrades
+  - fail2ban
+  - python3-systemd
+
+users:
+  - default
+  - name: signer
+    system: true
+    no_create_home: true
+    shell: /usr/sbin/nologin
+    lock_passwd: true
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-penguin.conf
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+  - path: /etc/apt/apt.conf.d/52penguin-unattended-upgrades
+    permissions: "0644"
+    content: |
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-WithUsers "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+
+  - path: /etc/fail2ban/jail.d/sshd.local
+    permissions: "0644"
+    content: |
+      [sshd]
+      enabled = true
+      backend = systemd
+      maxretry = 5
+      findtime = 10m
+      bantime = 1h
+
+  # Same logic as signer/deploy/open-web-ports.sh (deploy.sh re-runs that copy).
+  # Oracle Ubuntu images: edit /etc/iptables/rules.v4, never ufw (Oracle:
+  # "Using UFW to edit rules might cause an instance not to boot").
+  - path: /usr/local/sbin/penguin-open-web-ports
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      rules=/etc/iptables/rules.v4
+      if [[ -f $rules ]]; then
+        changed=0
+        for port in 80 443; do
+          line="-A INPUT -p tcp -m state --state NEW -m tcp --dport $port -j ACCEPT"
+          if ! grep -qxF -- "$line" "$rules"; then
+            grep -qE '^-A INPUT -j REJECT' "$rules" || { echo "no INPUT REJECT line in $rules" >&2; exit 1; }
+            awk -v l="$line" '!done && /^-A INPUT -j REJECT/ { print l; done=1 } { print }' "$rules" > "$rules.new"
+            chmod --reference="$rules" "$rules.new"
+            mv "$rules.new" "$rules"
+            changed=1
+          fi
+        done
+        if [[ $changed == 1 ]]; then iptables-restore < "$rules"; fi
+      else
+        DEBIAN_FRONTEND=noninteractive apt-get install -y ufw
+        ufw default deny incoming
+        ufw default allow outgoing
+        ufw allow 22/tcp
+        ufw allow 80/tcp
+        ufw allow 443/tcp
+        ufw --force enable
+      fi
+
+runcmd:
+  # Host firewall: 22 (already open), 80, 443.
+  - /usr/local/sbin/penguin-open-web-ports
+  # Caddy from the official repo (https://caddyserver.com/docs/install#debian-ubuntu-raspbian).
+  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  - curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' -o /etc/apt/sources.list.d/caddy-stable.list
+  - chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg /etc/apt/sources.list.d/caddy-stable.list
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y caddy
+  # Rust toolchain (minimal profile) for the build user; deploy.sh builds there.
+  - sudo -u ubuntu -H sh -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable'
+  - systemctl enable --now unattended-upgrades fail2ban
+  - systemctl restart ssh
+  - mkdir -p /var/lib/penguin-signer && touch /var/lib/penguin-signer/cloud-init.done

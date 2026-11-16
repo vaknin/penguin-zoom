@@ -1,0 +1,55 @@
+# Local package for this machine: builds from the working tree one level up.
+#   cd packaging && makepkg -si
+# Zoom's Meeting SDK for Web is fetched from npm at build time (Zoom's terms
+# govern redistribution, so it is never committed).
+pkgname=penguin-zoom
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Light native Linux client for Zoom meetings (Zoom Meeting SDK for Web in WebKitGTK)"
+arch=('x86_64')
+license=('custom')
+depends=('webkit2gtk-4.1' 'gtk3' 'gst-plugins-good' 'gst-plugins-bad' 'gst-libav'
+         'gst-plugin-pipewire' 'libpulse' 'libsecret' 'xdg-utils')
+makedepends=('cargo' 'npm')
+optdepends=('xdg-desktop-portal-hyprland: screen sharing on Hyprland'
+            'pipewire-pulse: switching speakers from the app')
+options=('!lto' '!debug')
+
+_src="$startdir/.."
+
+prepare() {
+  # Vendor the SDK into the build dir, not the working tree.
+  mkdir -p "$srcdir/data"
+  cp -r "$_src/ui" "$_src/web" "$srcdir/data/"
+  local tmp; tmp="$(mktemp -d)"
+  local ver; ver="$(cat "$_src/assets/zoom-sdk/VERSION" 2>/dev/null || echo 6.10.0)"
+  (cd "$tmp" && npm pack "@zoom/meetingsdk@$ver" --ignore-scripts --silent >/dev/null && tar xzf ./*.tgz)
+  mkdir -p "$srcdir/data/assets/zoom-sdk"
+  cp -r "$tmp/package/dist/." "$srcdir/data/assets/zoom-sdk/"
+  cp "$tmp/package/LICENSE.md" "$srcdir/data/assets/zoom-sdk/"
+  echo "$ver" > "$srcdir/data/assets/zoom-sdk/VERSION"
+  rm -rf "$tmp"
+}
+
+build() {
+  cd "$_src"
+  export CARGO_TARGET_DIR="$srcdir/target"
+  # The global cargo config points rustc-wrapper at a missing sccache (PLAN.md §3, owner item 3).
+  RUSTC_WRAPPER= cargo build --release --locked
+}
+
+check() {
+  cd "$_src"
+  CARGO_TARGET_DIR="$srcdir/target" RUSTC_WRAPPER= cargo test --release --locked
+}
+
+package() {
+  install -Dm755 "$srcdir/target/release/penguin-zoom" "$pkgdir/usr/bin/penguin-zoom"
+  install -d "$pkgdir/usr/share/$pkgname"
+  cp -r "$srcdir/data/." "$pkgdir/usr/share/$pkgname/"
+  # The spike page and its script stay out of the package.
+  rm -f "$pkgdir/usr/share/$pkgname/web/index.html" "$pkgdir/usr/share/$pkgname/web/spike.js"
+  install -Dm644 "$startdir/penguin-zoom.desktop" "$pkgdir/usr/share/applications/penguin-zoom.desktop"
+  install -Dm644 "$startdir/penguin-zoom.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/penguin-zoom.svg"
+  install -Dm644 "$srcdir/data/assets/zoom-sdk/LICENSE.md" "$pkgdir/usr/share/licenses/$pkgname/ZOOM-SDK-LICENSE.md"
+}

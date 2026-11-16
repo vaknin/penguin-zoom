@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penguin for Zoom</title>
+<meta name="description" content="Penguin for Zoom is an independent, lightweight Linux desktop app for joining Zoom meetings, made for Wayland and Hyprland.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="./">Penguin <span>for Zoom</span></a>
+    <nav class="site" aria-label="Site">
+      <ul>
+        <li><a href="./" aria-current="page">Home</a></li>
+        <li><a href="docs.html">Documentation</a></li>
+        <li><a href="support.html">Support</a></li>
+        <li><a href="privacy.html">Privacy</a></li>
+        <li><a href="terms.html">Terms</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="wrap">
+    <h1>Penguin for Zoom</h1>
+    <p class="lead">A light Linux desktop app for joining Zoom meetings. It opens Zoom meeting links in a small native window that fits Wayland tiling desktops such as Hyprland, with keyboard controls and global mute and leave keys.</p>
+
+    <div class="notice" role="note">
+      <p><strong>Penguin for Zoom is an independent app.</strong> It is not made, endorsed, sponsored or supported by Zoom Communications, Inc. "Zoom" is used only to say which service the app works with. Zoom is a trademark of Zoom Communications, Inc.</p>
+    </div>
+
+    <figure class="shot">
+      <!-- Screenshot slot: replace this text with
+           <img src="screenshot.png" alt="Penguin for Zoom in a meeting, with the floating control bar at the bottom" width="1600" height="1000"> -->
+      <figcaption>Screenshot coming soon</figcaption>
+    </figure>
+
+    <h2>What it does</h2>
+    <div class="cards">
+      <div class="card"><h3>Opens meeting links</h3><p>Click a Zoom meeting link anywhere, or paste one with <kbd>Ctrl</kbd> <kbd>V</kbd>, and it opens in Penguin.</p></div>
+      <div class="card"><h3>Join screen</h3><p>Camera preview, microphone and camera toggles, device choice and your display name before you join.</p></div>
+      <div class="card"><h3>In the meeting</h3><p>Mute, camera, screen share, chat, people list, gallery or speaker view, breakout rooms as a participant.</p></div>
+      <div class="card"><h3>Keyboard first</h3><p>Single-key controls in the window, and desktop-wide mute and leave keys for Hyprland.</p></div>
+      <div class="card"><h3>Speaker choice</h3><p>Send meeting audio to the speakers or headphones you pick, without changing the system default.</p></div>
+      <div class="card"><h3>Little data</h3><p>No account with us, no analytics, no ads. Settings stay on your computer. See the <a href="privacy.html">privacy policy</a>.</p></div>
+    </div>
+
+    <h2>How it works</h2>
+    <p>Penguin is a Linux desktop app that shows Zoom's own Meeting SDK for Web inside a WebKitGTK window. Your audio, video, screen share and chat go directly between your computer and Zoom. Zoom's <a href="https://www.zoom.com/en/trust/terms/">Terms of Service</a> and <a href="https://www.zoom.com/en/trust/privacy/privacy-statement/">Privacy Statement</a> apply to the meeting itself.</p>
+    <p>You sign in with your own Zoom account, and the app joins meetings as you. The only server we run is a small signing service that creates the short-lived join signature Zoom requires. Details are in the <a href="privacy.html">privacy policy</a>.</p>
+
+    <h2>Requirements</h2>
+    <ul>
+      <li>Arch Linux (or an Arch-based distribution) with WebKitGTK 4.1, GStreamer and PipeWire or PulseAudio.</li>
+      <li>A Zoom account to sign in with.</li>
+      <li>Works on any Linux desktop; tested on Wayland with Hyprland.</li>
+    </ul>
+
+    <h2>Install</h2>
+    <p>Install the Arch package, then start <code>penguin-zoom</code> from your app launcher or a terminal:</p>
+<pre><code>sudo pacman -U penguin-zoom-*.pkg.tar.zst
+penguin-zoom</code></pre>
+    <p>Full steps, including sign-in, keyboard keys and how to remove the app, are in the <a href="docs.html">documentation</a>.</p>
+
+    <h2>Links</h2>
+    <ul>
+      <li><a href="docs.html">Documentation</a>: install, sign in, use, troubleshoot, remove</li>
+      <li><a href="support.html">Support</a>: how to get help and when to expect a reply</li>
+      <li><a href="privacy.html">Privacy policy</a></li>
+      <li><a href="terms.html">Terms of use</a></li>
+      <li><a href="https://github.com/vaknin/penguin-zoom">Source code and issues on GitHub</a></li>
+    </ul>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <ul>
+      <li><a href="docs.html">Documentation</a></li>
+      <li><a href="support.html">Support</a></li>
+      <li><a href="privacy.html">Privacy</a></li>
+      <li><a href="terms.html">Terms</a></li>
+    </ul>
+    <p>Penguin for Zoom is made by Aviv Vaknin, an independent developer. It is not affiliated with, endorsed or supported by Zoom Communications, Inc. Zoom is a trademark of Zoom Communications, Inc.</p>
+  </div>
+</footer>
+</body>
+</html>

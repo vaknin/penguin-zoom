@@ -6,16 +6,20 @@
   },
   "oauth_information": {
     "usage": "USER_OPERATION",
-    "development_redirect_uri": "http://127.0.0.1:53682/oauth/callback",
-    "production_redirect_uri": "http://127.0.0.1:53682/oauth/callback",
+    "development_redirect_uri": "https://penguin.kitah.co.il/oauth/callback",
+    "production_redirect_uri": "https://penguin.kitah.co.il/oauth/callback",
     "oauth_allow_list": [
-      "http://127.0.0.1:53682/oauth/callback"
+      "https://penguin.kitah.co.il/oauth/callback"
     ],
     "strict_mode": false,
     "subdomain_strict_mode": false,
     "scopes": [
       {
         "scope": "user:read:token",
+        "optional": false
+      },
+      {
+        "scope": "user:read:user",
         "optional": false
       }
     ]

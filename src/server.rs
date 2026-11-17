@@ -76,6 +76,9 @@ struct Session {
     refresh_token: Option<String>,
     /// The keyring was already asked for a saved sign-in in this run.
     keyring_checked: bool,
+    /// "Name (email)" from GET /v2/users/me (scope user:read:user), for the
+    /// "Signed in as" line. Memory only, like the access token.
+    user_label: Option<String>,
 }
 
 /// Commands the page acts on (`POST /api/cmd`, `penguin-zoom --cmd …`).
@@ -643,6 +646,7 @@ async fn access_token(s: &AppState) -> Option<String> {
             // Other failures (429, 5xx) keep it for the next try.
             sess.access_token = None;
             sess.refresh_token = None;
+            sess.user_label = None;
             keyring_clear_refresh(s.keyring).await;
         }
         return None;
@@ -656,6 +660,26 @@ async fn access_token(s: &AppState) -> Option<String> {
     }
     eprintln!("[oauth] access token refreshed");
     Some(access)
+}
+
+/// "Name (email)" of the signed-in user, from GET /v2/users/me (scope
+/// user:read:user). None if Zoom refuses it (e.g. the scope isn't granted yet).
+async fn fetch_me(s: &AppState, access: &str) -> Option<String> {
+    let r = s.http.get(format!("{}/v2/users/me", s.zoom_api)).bearer_auth(access).send().await.ok()?;
+    if !r.status().is_success() {
+        eprintln!("[oauth] profile lookup: {}", r.status());
+        return None;
+    }
+    let v: serde_json::Value = r.json().await.ok()?;
+    let name = format!("{} {}", v["first_name"].as_str().unwrap_or(""), v["last_name"].as_str().unwrap_or(""));
+    let name = name.trim();
+    let email = v["email"].as_str().unwrap_or("").trim();
+    match (name.is_empty(), email.is_empty()) {
+        (false, false) => Some(format!("{name} ({email})")),
+        (false, true) => Some(name.to_string()),
+        (true, false) => Some(email.to_string()),
+        (true, true) => None,
+    }
 }
 
 /// Fetches a fresh ZAK. The app has scope `user:read:token`, so
@@ -702,6 +726,7 @@ async fn signout(State(s): State<AppState>) -> Response {
         let mut sess = s.session.lock().await;
         sess.refresh_token = None;
         sess.access_token = None;
+        sess.user_label = None;
         sess.keyring_checked = true;
     }
     keyring_clear_refresh(s.keyring).await;
@@ -731,10 +756,20 @@ async fn signout(State(s): State<AppState>) -> Response {
 }
 
 async fn status(State(s): State<AppState>) -> Response {
-    let signed_in = access_token(&s).await.is_some();
+    let access = access_token(&s).await;
+    let signed_in = access.is_some();
+    // After a restart the sign-in comes back from the keyring without a name:
+    // look it up the first time the window asks.
+    if let Some(a) = &access {
+        if s.session.lock().await.user_label.is_none() {
+            let label = fetch_me(&s, a).await;
+            s.session.lock().await.user_label = label;
+        }
+    }
     let sess = s.session.lock().await;
     Json(json!({
         "signedIn": signed_in,
+        "user": sess.user_label,
         "hasRefresh": sess.refresh_token.is_some(),
         "publicClientConfigured": public_client_id().is_some(),
         "remoteSigner": signer_url().is_some(),
@@ -1056,6 +1091,7 @@ mod tests {
         }
         match uri.path() {
             "/v2/users/me/token" => Json(json!({"token": format!("zak-for-{}", &auth[7..])})).into_response(),
+            "/v2/users/me" => Json(json!({"first_name": "Test", "last_name": "User", "email": "test@example.com"})).into_response(),
             _ => StatusCode::NOT_FOUND.into_response(),
         }
     }
@@ -1154,6 +1190,7 @@ mod tests {
         assert_eq!(v["zak"], "zak-for-a1");
         let v = body_json(status(State(s)).await).await;
         assert_eq!(v["signedIn"].as_bool(), Some(true));
+        assert_eq!(v["user"].as_str(), Some("Test User (test@example.com)"));
     }
 
     #[tokio::test]

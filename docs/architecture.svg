@@ -29,8 +29,8 @@
   <text class="s" x="114" y="318">app interface in HTML/CSS/JS around it</text>
   <rect class="box" x="94" y="344" width="592" height="88"/>
   <text class="t" x="114" y="376" font-size="19">Local server: 127.0.0.1:53682 only</text>
-  <text class="s" x="114" y="402">serves the app UI to its own window, OAuth loopback</text>
-  <text class="s" x="114" y="424">redirect (PKCE), Host/Origin checks</text>
+  <text class="s" x="114" y="402">serves the app UI to its own window; finishes sign-in</text>
+  <text class="s" x="114" y="424">(PKCE) via our https page; Host/Origin checks</text>
 
   <rect class="box" x="70" y="500" width="640" height="120"/>
   <text class="t" x="94" y="536">OS keyring (Secret Service)</text>
@@ -52,7 +52,7 @@
   <text class="s" x="954" y="214">public client, Authorization Code + PKCE (S256)</text>
   <rect class="box" x="930" y="270" width="600" height="96"/>
   <text class="t" x="954" y="306">api.zoom.us</text>
-  <text class="s" x="954" y="334">GET /v2/users/me/token?type=zak (scope user:read:token)</text>
+  <text class="s" x="954" y="334">/v2/users/me/token?type=zak, /v2/users/me</text>
   <rect class="box" x="930" y="390" width="600" height="96"/>
   <text class="t" x="954" y="426">Zoom meeting service</text>
   <text class="s" x="954" y="454">audio, video, share, chat via the Meeting SDK</text>
@@ -70,7 +70,7 @@
   <text class="s" x="954" y="824">Meeting SDK JWT with the SDK secret (server only);</text>
   <text class="s" x="954" y="848">role 1 only after checking the user's token with Zoom.</text>
   <text class="s" x="954" y="872">POST /v1/zoom-webhook: x-zm-signature verified.</text>
-  <text class="s" x="954" y="900">No database, no logs of IPs or tokens. Public pages.</text>
+  <text class="s" x="954" y="900">No database or logs. Public pages + sign-in hand-off page.</text>
 
   <!-- flows -->
   <path class="ln" d="M710,250 L930,198"/>

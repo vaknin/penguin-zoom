@@ -3,13 +3,17 @@
 Text for the Zoom Marketplace forms. Everything here must stay true to the code and to
 `site/privacy.html`; change both together.
 
-## Scope description: `user:read:token`
+## Scope description: `user:read:token` and `user:read:user`
 
-Used only to get the user's ZAK (GET /v2/users/me/token?type=zak) right before each meeting join. The app hands the ZAK to the Zoom Meeting SDK so the user joins the meeting as themselves. The ZAK is kept only in the app's memory for that join, is sent nowhere except Zoom, and is never written to disk. No Zoom data is stored on any server we run. To keep the user signed in, the OAuth refresh token is stored only on the user's own computer, in the operating system's keyring (Secret Service, e.g. GNOME Keyring, which keeps it encrypted at rest). The access token is held in memory only. Signing out revokes the token with Zoom and deletes it from the keyring.
+user:read:token: used only to get the user's ZAK (GET /v2/users/me/token?type=zak) right before each meeting join. The app hands the ZAK to the Zoom Meeting SDK so the user joins the meeting as themselves. The ZAK is kept only in the app's memory for that join, is sent nowhere except Zoom, and is never written to disk.
+
+user:read:user: used only to show "Signed in as <name> (<email>)" in the app's settings, so the user can see which Zoom account they are signed in with (GET /v2/users/me). Only the first name, last name and email are used; they are held in the app's memory and never written to disk or sent anywhere.
+
+No Zoom data is stored on any server we run. To keep the user signed in, the OAuth refresh token is stored only on the user's own computer, in the operating system's keyring (Secret Service, e.g. GNOME Keyring, which keeps it encrypted at rest). The access token is held in memory only. Signing out revokes the token with Zoom and deletes it from the keyring.
 
 ## Why public client OAuth in production
 
-Penguin for Zoom is a desktop application that each user installs and runs on their own Linux computer. A desktop app cannot keep a client secret confidential: anything shipped in the program can be extracted from it. This is the case Zoom's PKCE guidance describes, so the app signs in as a public client using the Authorization Code flow with PKCE (S256) and no client secret. The redirect goes to a loopback address (http://127.0.0.1:53682/oauth/callback), served by the app itself and bound to 127.0.0.1 only, and the app checks the OAuth state parameter before redeeming the code. The confidential client secret never leaves our server: Meeting SDK signatures are created by our hosted signing service (https://penguin.kitah.co.il), not on the user's computer.
+Penguin for Zoom is a desktop application that each user installs and runs on their own Linux computer. A desktop app cannot keep a client secret confidential: anything shipped in the program can be extracted from it. This is the case Zoom's PKCE guidance describes, so the app signs in as a public client using the Authorization Code flow with PKCE (S256) and no client secret. Sign-in runs in the user's own browser. Zoom redirects to https://penguin.kitah.co.il/oauth/callback, a static page on our site that passes the code and state straight on, in the browser, to the app's own server on http://127.0.0.1:53682/oauth/callback (bound to 127.0.0.1 only); nothing is stored or logged on our site. The app checks the OAuth state before redeeming the code, and the code is useless without the PKCE verifier, which exists only in the app's memory. The confidential client secret never leaves our server: Meeting SDK signatures are created by our hosted signing service (https://penguin.kitah.co.il), not on the user's computer.
 
 ## Short description
 
@@ -36,7 +40,7 @@ Penguin for Zoom is an independent app and is not made, endorsed or supported by
 
 ## Technical design: Application overview
 
-Penguin for Zoom is a desktop application for Linux, written in Rust. It opens a native window with the system web view (WebKitGTK) and loads the Zoom Meeting SDK for Web (component view) from files installed with the app; the SDK is used unchanged. A small HTTP server inside the app, bound to 127.0.0.1:53682 only, serves the app's interface to its own window and handles the OAuth redirect.
+Penguin for Zoom is a desktop application for Linux, written in Rust. It opens a native window with the system web view (WebKitGTK) and loads the Zoom Meeting SDK for Web (component view) from files installed with the app; the SDK is used unchanged. A small HTTP server inside the app, bound to 127.0.0.1:53682 only, serves the app's interface to its own window and completes sign-in (Zoom redirects the user's browser to an https page on our site, which hands the code to this local server).
 
 Flow of a join:
 1. The user opens a Zoom meeting link (the app registers as the handler for zoommtg:// links) or pastes one.
@@ -49,7 +53,7 @@ Components:
 - Signing service (https://penguin.kitah.co.il/v1/signature): a small Rust service on an Oracle Cloud VM in Israel, behind Caddy with HTTPS. It holds the SDK secret, has no database, and keeps nothing after a request. It also receives the deauthorization webhook.
 - Public pages (Terms, Privacy, Support, Docs) on the same host.
 
-Scopes: user:read:token only.
+Scopes: user:read:token (ZAK for joining) and user:read:user (name and email for the "Signed in as" line).
 
 ## Technical design: Technology stack
 
@@ -58,7 +62,7 @@ Desktop app (runs on the user's Linux computer):
 - Zoom Meeting SDK for Web 6.10.0, component view (ZoomMtgEmbedded), installed with the app from npm (@zoom/meetingsdk) and loaded from local files, unchanged.
 - App interface: plain HTML, CSS and JavaScript (no framework); a small wrapper calls the SDK's public API (join, mute, leave, chat, breakout rooms, video options).
 - Local HTTP server: tokio and axum 0.8, bound to 127.0.0.1:53682 only.
-- HTTP client: reqwest 0.13 (rustls/HTTPS) for Zoom OAuth (authorize, token, revoke) and the Zoom REST API (GET /v2/users/me/token?type=zak), and for our signing service.
+- HTTP client: reqwest 0.13 (rustls/HTTPS) for Zoom OAuth (authorize, token, revoke) and the Zoom REST API (GET /v2/users/me/token?type=zak for the ZAK, GET /v2/users/me for the signed-in user's name and email), and for our signing service.
 - OAuth 2.0 Authorization Code with PKCE (S256), public client; hmac/sha2/base64 crates for PKCE.
 - Token storage: the OS keyring through the Secret Service API (libsecret's secret-tool), refresh token only.
 - Media: WebKitGTK media capture with GStreamer 1.28 and PipeWire; screen sharing through xdg-desktop-portal (ScreenCast) with ashpd and GStreamer.
@@ -72,7 +76,7 @@ Signing service (https://penguin.kitah.co.il):
 ## Technical design: Security overview
 
 - Secrets: the SDK client secret exists only on the signing server, in a root-only (mode 600) environment file. It is never shipped in the app, logged or sent to clients.
-- Sign-in: OAuth 2.0 Authorization Code with PKCE (S256), public client, no client secret in the app. The OAuth state is checked before the code is redeemed. The redirect is a loopback URL on 127.0.0.1.
+- Sign-in: OAuth 2.0 Authorization Code with PKCE (S256), public client, no client secret in the app, in the user's own browser. Zoom redirects to https://penguin.kitah.co.il/oauth/callback, a static page that forwards the code and state in the browser to the app's server on 127.0.0.1; it stores and logs nothing. The OAuth state is checked before the code is redeemed, and the code can't be redeemed without the PKCE verifier, which stays in the app's memory.
 - Tokens: the access token and ZAK are kept in memory only. The refresh token is stored in the OS keyring (Secret Service, encrypted at rest), replaced on every refresh, and deleted on sign-out or when Zoom rejects it. Sign-out calls Zoom's revoke endpoint. Tokens are masked in the app's diagnostic output.
 - Local server: bound to 127.0.0.1 only; it answers only requests whose Host is 127.0.0.1:53682 or localhost:53682 (against DNS rebinding) and refuses requests from other origins for anything that changes state or returns tokens. Only http(s) links are passed to the system browser.
 - Signing service: HTTPS only (TLS certificates from Let's Encrypt, HSTS), request bodies limited to 4 KB, timeouts on all connections, rate limiting per client IP held in memory only, no access logs, no database, no stored IP addresses or tokens. Host (role 1) signatures require a valid Zoom access token, checked with Zoom; only a one-way hash is cached in memory for a few minutes. The service runs as an unprivileged system user under a hardened systemd unit. The server accepts SSH with keys only and has automatic security updates and fail2ban.

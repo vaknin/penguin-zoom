@@ -66,7 +66,6 @@ struct Session {
     refresh_token: Option<String>,
     /// The keyring was already asked for a saved sign-in in this run.
     keyring_checked: bool,
-    user_label: Option<String>,
 }
 
 /// Commands the page acts on (`POST /api/cmd`, `penguin-zoom --cmd …`).
@@ -468,10 +467,6 @@ async fn oauth_callback(
     let access = tok["access_token"].as_str().map(str::to_owned);
     let refresh = tok["refresh_token"].as_str().map(str::to_owned);
     eprintln!("[oauth] signed in; scopes: {}", tok["scope"].as_str().unwrap_or("?"));
-    let label = match &access {
-        Some(a) => fetch_me(&s, a).await,
-        None => None,
-    };
     if let Some(r) = &refresh {
         keyring_save_refresh(s.keyring, r).await;
     }
@@ -481,7 +476,6 @@ async fn oauth_callback(
         sess.access_expires = now() + tok["expires_in"].as_i64().unwrap_or(3600);
         sess.refresh_token = refresh;
         sess.keyring_checked = true;
-        sess.user_label = label;
     }
     Redirect::to("/").into_response()
 }
@@ -585,7 +579,6 @@ async fn access_token(s: &AppState) -> Option<String> {
             // Other failures (429, 5xx) keep it for the next try.
             sess.access_token = None;
             sess.refresh_token = None;
-            sess.user_label = None;
             keyring_clear_refresh(s.keyring).await;
         }
         return None;
@@ -597,30 +590,8 @@ async fn access_token(s: &AppState) -> Option<String> {
         sess.refresh_token = Some(new.to_owned());
         keyring_save_refresh(s.keyring, new).await;
     }
-    if sess.user_label.is_none() {
-        sess.user_label = fetch_me(s, &access).await;
-    }
     eprintln!("[oauth] access token refreshed");
     Some(access)
-}
-
-async fn fetch_me(s: &AppState, access: &str) -> Option<String> {
-    let v: serde_json::Value = s
-        .http
-        .get(format!("{}/v2/users/me", s.zoom_api))
-        .bearer_auth(access)
-        .send()
-        .await
-        .ok()?
-        .json()
-        .await
-        .ok()?;
-    let name = format!(
-        "{} {}",
-        v["first_name"].as_str().unwrap_or(""),
-        v["last_name"].as_str().unwrap_or("")
-    );
-    Some(name.trim().to_string()).filter(|s| !s.is_empty())
 }
 
 /// Fetches a fresh ZAK. The app has scope `user:read:token`, so
@@ -665,7 +636,6 @@ async fn signout(State(s): State<AppState>) -> Response {
     let token = access_token(&s).await;
     {
         let mut sess = s.session.lock().await;
-        sess.user_label = None;
         sess.refresh_token = None;
         sess.access_token = None;
         sess.keyring_checked = true;
@@ -702,7 +672,6 @@ async fn status(State(s): State<AppState>) -> Response {
     Json(json!({
         "signedIn": signed_in,
         "hasRefresh": sess.refresh_token.is_some(),
-        "user": sess.user_label,
         "publicClientConfigured": public_client_id().is_some(),
         "remoteSigner": signer_url().is_some(),
         "sabEnv": std::env::var("JSC_useSharedArrayBuffer").ok(),
@@ -998,7 +967,6 @@ mod tests {
             return StatusCode::UNAUTHORIZED.into_response();
         }
         match uri.path() {
-            "/v2/users/me" => Json(json!({"first_name": "Test", "last_name": "User"})).into_response(),
             "/v2/users/me/token" => Json(json!({"token": format!("zak-for-{}", &auth[7..])})).into_response(),
             _ => StatusCode::NOT_FOUND.into_response(),
         }
@@ -1048,7 +1016,6 @@ mod tests {
         {
             let sess = s.session.lock().await;
             assert_eq!(sess.refresh_token.as_deref(), Some("r2"));
-            assert_eq!(sess.user_label.as_deref(), Some("Test User"));
         }
         // Still fresh: no second trip to Zoom.
         assert_eq!(access_token(&s).await.as_deref(), Some("a1"));
@@ -1071,11 +1038,10 @@ mod tests {
     #[tokio::test]
     async fn refused_refresh_token_signs_out_but_a_busy_zoom_does_not() {
         let (s, _) = fake_zoom(Some("expired")).await;
-        s.session.lock().await.user_label = Some("Old".into());
         assert_eq!(access_token(&s).await, None);
         {
             let sess = s.session.lock().await;
-            assert!(sess.refresh_token.is_none() && sess.access_token.is_none() && sess.user_label.is_none());
+            assert!(sess.refresh_token.is_none() && sess.access_token.is_none());
         }
 
         let (s, _) = fake_zoom(Some("busy")).await;
@@ -1099,7 +1065,7 @@ mod tests {
         let v = body_json(zak(State(s.clone())).await).await;
         assert_eq!(v["zak"], "zak-for-a1");
         let v = body_json(status(State(s)).await).await;
-        assert_eq!((v["signedIn"].as_bool(), v["user"].as_str()), (Some(true), Some("Test User")));
+        assert_eq!(v["signedIn"].as_bool(), Some(true));
     }
 
     #[tokio::test]

@@ -73,7 +73,6 @@
         <tr><td>Display name you type on the join screen</td><td>Your settings file</td><td>Zoom, when you join, so other participants see it</td><td>On your computer: until you change it. At Zoom: per Zoom's policy</td></tr>
         <tr><td>Meeting number and passcode (from the link you open)</td><td>App memory while it runs</td><td>Zoom (both, to join). Our signing service (meeting number only, see <a href="#signer">section 5</a>)</td><td>Gone when the app quits. Not stored by our signing service</td></tr>
         <tr><td>Zoom sign-in tokens (OAuth access token and refresh token)</td><td>Access token: app memory only. Refresh token: your system keyring (for example GNOME Keyring), so you stay signed in after a restart; never in a plain file</td><td>Zoom's API. For joining as host only, the access token is sent to our signing service for a one-time check</td><td>Access token until you quit; refresh token until you sign out, Zoom rejects it, or it expires (Zoom: 90 days)</td></tr>
-        <tr><td>Your name from your Zoom profile</td><td>App memory only</td><td>Nobody; shown to you in Settings</td><td>Until you sign out or quit the app</td></tr>
         <tr><td>ZAK (Zoom's short-lived join token for your account)</td><td>App memory, for the few seconds of joining</td><td>Zoom (it goes back to Zoom to join the meeting as you)</td><td>Discarded after the join; it expires within minutes</td></tr>
         <tr><td>Meeting audio, video, screen share, chat messages, participant list</td><td>Not stored by the app</td><td>Directly between your computer and Zoom. We never receive them</td><td>Not kept by us. At Zoom: per Zoom's policy</td></tr>
         <tr><td>Camera and microphone preview on the join screen</td><td>Shown on your screen only</td><td>Nobody until you join</td><td>Not kept</td></tr>
@@ -91,11 +90,10 @@
     <h2 id="zoom">4. Data the app gets from Zoom</h2>
     <p>Zoom requires apps like Penguin to join meetings as a signed-in Zoom user, so you sign in with your own Zoom account before joining. When you sign in, Zoom asks you to approve the app and gives it tokens for your account. The app asks Zoom only for:</p>
     <ul>
-      <li><strong>A ZAK</strong> (scope <code>user:read:zak</code>): a short-lived token that lets the app join a meeting as you. It is fetched right before each join and handed back to Zoom.</li>
-      <li><strong>Your basic profile</strong> (scope <code>user:read:user</code>): used only to show "Signed in as <em>your name</em>" in Settings. Zoom's answer also contains other profile fields (such as your email address and account ID); the app keeps only your first and last name, in memory, and discards the rest.</li>
+      <li><strong>A ZAK</strong> (scope <code>user:read:token</code>): a short-lived token that lets the app join a meeting as you. It is fetched right before each join and handed back to Zoom.</li>
     </ul>
     <p>The app does not read your meetings list, contacts, recordings, chat history or any other Zoom data, and it does not change anything in your Zoom account.</p>
-    <p>Tokens are held only in the memory of the running app. They are not written to disk, so you sign in again after restarting the app. "Sign out" in Settings revokes the token with Zoom and clears it from memory.</p>
+    <p>The access token is held only in the memory of the running app. The refresh token, which keeps you signed in after a restart, is stored in your system keyring (for example GNOME Keyring), never in a plain file. "Sign out" in Settings revokes the token with Zoom and deletes both.</p>
 
     <h2 id="signer">5. Our signing service</h2>
     <p>Zoom requires every join to carry a signature made with the app's secret key. To keep that key off your computer, a small service we run on Oracle Cloud (over HTTPS) creates it. For each join it receives:</p>
@@ -127,7 +125,7 @@
 
     <h2 id="retention">8. How long data is kept</h2>
     <ul>
-      <li>On your computer: settings until you change or delete them; the sign-in (refresh) token in your keyring until you sign out; other tokens and your profile name until you quit.</li>
+      <li>On your computer: settings until you change or delete them; the sign-in (refresh) token in your keyring until you sign out; other tokens until you quit.</li>
       <li>On our signing service: nothing after the request finishes, except the 5-minute in-memory token hash for host joins. A restart clears all memory.</li>
       <li>Support: GitHub issues stay public until closed or deleted; emails are deleted once no longer needed, or on request.</li>
     </ul>

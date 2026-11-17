@@ -292,6 +292,39 @@ def shot(path):
     log(path)
 
 
+PIN_FILE = os.path.expanduser("~/.config/droid/pin")  # mode 600; the owner's phone PIN
+
+
+def _adbsh(*a):
+    return subprocess.run(["adb", "-s", d.serial, "shell", *a], capture_output=True, text=True, timeout=10).stdout
+
+
+def is_locked():
+    return bool(re.search(r"\(current\).*deviceLocked=1", _adbsh("dumpsys", "trust")))
+
+
+def unlock():
+    """Unlock the phone with the PIN in PIN_FILE. One attempt only: repeated
+    wrong PINs lock the phone out for minutes, so never loop this."""
+    if not is_locked():
+        return log("unlocked already")
+    try:
+        pin = open(PIN_FILE).read().strip()
+    except OSError:
+        fail(f"locked, and no PIN in {PIN_FILE}: ask the owner")
+    _adbsh("input", "keyevent", "KEYCODE_WAKEUP")
+    _adbsh("wm", "dismiss-keyguard")  # opens the PIN pad
+    time.sleep(0.6)  # the bouncer has no dump to wait on while secure
+    _adbsh("input", "text", pin)
+    _adbsh("input", "keyevent", "KEYCODE_ENTER")
+    end = time.time() + 4
+    while time.time() < end:
+        if not is_locked():
+            return log("unlocked")
+        time.sleep(0.25)
+    fail("still locked after one PIN attempt (wrong PIN in the file, or the bouncer wasn't up); not retrying")
+
+
 def ui():
     for n, _ in Snap().nodes:
         t, de = n.get("text") or "", n.get("content-desc") or ""
@@ -347,6 +380,8 @@ COMMANDS = {
     "swipe": lambda a: swipe(a[0] if a else "up"),
     "shot": lambda a: shot(a[0]),
     "animations": lambda a: animations(a[0] == "on"),
+    "unlock": lambda a: unlock(),
+    "locked": lambda a: log("locked" if is_locked() else "unlocked"),
 }
 
 

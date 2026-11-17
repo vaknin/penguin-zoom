@@ -845,10 +845,37 @@ async function start() {
       }
       if (step === 'reclaim-host') { zc.reclaimHost(); continue; }
       if (step.startsWith('click:')) { // tests: press a visible button by its text (Zoom's windows too)
-        const t = step.slice(6);
-        const b = [...document.querySelectorAll('button, [role=button], label')].find((x) => x.offsetParent !== null && x.textContent.trim() === t);
+        const [t, nth] = step.slice(6).split('@'); // click:Text@2 = the second such button; click:Room 2* = text starting so
+        const hit = t.endsWith('*') ? (s) => s.startsWith(t.slice(0, -1)) : (s) => s === t;
+        const b = [...document.querySelectorAll('button, [role=button], [role=menuitem], [role=option], label, li')]
+          .filter((x) => x.offsetParent !== null && !x.closest('#panel, #pill, #toast'))
+          .filter((x) => hit(x.textContent.trim()) || x.getAttribute('aria-label') === t)[(+nth || 1) - 1];
         tlog(`click ${t} -> ${b ? 'found' : 'not found'}`);
         b?.click();
+        continue;
+      }
+      if (step === 'zui') { // tests: what Zoom's visible windows offer (buttons, fields, headings)
+        const ours = '#panel, #pill, #toast, .kb-keys, #devices, #settings, #join, #idle';
+        const seen = [...document.querySelectorAll('button, [role=button], [role=menuitem], [role=option], [role=treeitem], li, input, textarea')]
+          .filter((x) => x.offsetParent !== null && !x.closest('.zc-collapsed') && !x.closest(ours))
+          .map((x) => `${x.tagName.toLowerCase()}:${(x.textContent.trim() || x.getAttribute('aria-label') || x.title || x.placeholder || '').slice(0, 40)}`);
+        tlog('zui ' + [...new Set(seen)].join(' | ').slice(0, 1800));
+        continue;
+      }
+      if (step.startsWith('hover:')) { // tests: point at an element by its text (rows that show buttons on hover)
+        const t = step.slice(6);
+        const el = [...document.querySelectorAll('#zoomRoot *, body > div *')].filter((x) => x.offsetParent !== null && x.textContent.trim() === t).pop();
+        for (let x = el, i = 0; x && i < 4; x = x.parentElement, i++) for (const ev of ['mouseover', 'mouseenter', 'mousemove']) x.dispatchEvent(new MouseEvent(ev, { bubbles: ev !== 'mouseenter' }));
+        tlog(`hover ${t} -> ${el ? 'found' : 'not found'}`);
+        continue;
+      }
+      if (step.startsWith('fill:')) { // tests: type into the visible text field in Zoom's windows
+        const f = [...document.querySelectorAll('textarea, input[type=text], input:not([type])')].find((x) => x.offsetParent !== null && !x.closest('#panel, #join'));
+        if (f) {
+          Object.getOwnPropertyDescriptor(Object.getPrototypeOf(f), 'value').set.call(f, step.slice(5));
+          f.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        tlog(`fill -> ${f ? f.tagName : 'no field'}`);
         continue;
       }
       if (step.startsWith('say:')) { $('chatInput').value = step.slice(4); $('chatForm').requestSubmit(); }

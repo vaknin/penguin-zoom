@@ -15,6 +15,7 @@ fixed sleeps, phone animations off while it runs. Use through `zp`:
   zp allow-share             Host tools: let participants share
   zp start                   start a new meeting from the home screen
   zp info                    print "ID PASSCODE" (and write $S/meeting.txt)
+  zp reclaim-host            take host back (participants -> Reclaim host)
   zp leave                   leave the meeting (host: end it for all)
   zp shot NAME               screenshot to $S/phone/NAME.png
   zp quit                    stop the server, restore phone animations
@@ -270,6 +271,17 @@ def admit(name):
     log("admitted")
 
 
+def reclaim_host():
+    """Take host back (the phone is the meeting owner's account)."""
+    participants()
+    ok = tap(r"^Reclaim host$|^Reclaim Host$", 4, required=False)
+    tap(r"^(Reclaim|Yes|OK)$", 2, required=False)
+    close_panel()
+    if not ok:
+        fail("no Reclaim host in the participants list")
+    log("reclaimed host")
+
+
 def allow_share():
     more(r"^Host tools, button")
     tap(r"^Participants$", 3, required=False)
@@ -367,6 +379,7 @@ COMMANDS.update({
     "stop-share": lambda a: stop_share(),
     "make-host": lambda a: make_host(a[0]),
     "admit": lambda a: admit(a[0] if a else "all"),
+    "reclaim-host": lambda a: reclaim_host(),
     "allow-share": lambda a: allow_share(),
     "start": lambda a: start(),
     "info": lambda a: info(),

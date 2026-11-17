@@ -69,6 +69,8 @@ const api = async (path, opts) => {
 };
 // Never write settings we failed to load (that would wipe the saved ones).
 let settingsLoaded = false;
+// Zoom's SDK loading (start); Join waits for it.
+let zcReady = Promise.resolve();
 const putSettings = () => !settingsLoaded ? Promise.resolve() : api('/api/settings', { method: 'PUT', headers: { 'content-type': 'application/json' },
   body: JSON.stringify(S.settings) }).catch(() => {});
 
@@ -114,11 +116,14 @@ function go(screen) {
 function renderJoin() {
   $('joinTitle').textContent = S.meet.topic && S.meet.joined ? S.meet.topic
     : (S.launch.host ? 'New meeting ' : 'Meeting ') + fmtNumber(S.launch.number);
-  $('joinSub').textContent = S.account.signedIn ? `Signed in${S.account.user ? ' as ' + S.account.user : ''}` : 'Joining as a guest';
+  renderJoinSub();
   $('joinName').value = $('joinName').value || S.settings.name || '';
   if (!$('joinName').value) $('joinName').focus(); // typing goes to the name, not to shortcuts
   renderJoinToggles();
   startPreview();
+}
+function renderJoinSub() {
+  $('joinSub').textContent = S.account.signedIn ? `Signed in${S.account.user ? ' as ' + S.account.user : ''}` : 'Joining as a guest';
 }
 function renderJoinToggles() {
   const mic = $('joinMic'), cam = $('joinCam');
@@ -158,6 +163,7 @@ async function doJoin(e) {
   $('joinBtn').disabled = true;
   $('joinBtn').textContent = 'Joining…';
   try {
+    await zcReady; // the SDK may still be loading right after launch
     await zc.join(JSON.stringify({
       number: S.launch.number, pwd: S.launch.pwd, name, host: !!S.launch.host,
       muted: !S.joinMic, cameraOff: !S.joinCam, signedIn: S.account.signedIn,
@@ -403,7 +409,9 @@ function renderToast() {
 // ---------- devices ----------
 async function openDevices(anchor) {
   S.devicesOpen = true;
-  $('devices').hidden = false;
+  // Show what we already know at once; the first time, wait for the lists
+  // rather than open an empty popover that then grows.
+  if (S.dev.loaded) { renderDevices(); $('devices').hidden = false; }
   document.querySelectorAll('[data-action="devices"]').forEach((b) => b.setAttribute('aria-expanded', 'true'));
   if (anchor && S.screen === 'meeting' && S.settings.style === 'standard') {
     const r = anchor.getBoundingClientRect();
@@ -422,7 +430,10 @@ async function openDevices(anchor) {
     S.dev.mics = named(d.mics, 'Microphone');
   } catch {}
   try { S.dev.spk = await api('/api/speakers'); } catch { S.dev.spk = []; }
+  S.dev.loaded = true;
+  if (!S.devicesOpen) return;
   renderDevices();
+  $('devices').hidden = false;
 }
 function closeDevices() {
   S.devicesOpen = false;
@@ -535,7 +546,7 @@ async function refreshAccount() {
     S.account = { signedIn: !!st.signedIn, user: st.user || null, configured: !!st.publicClientConfigured };
   } catch {}
   renderSettings();
-  if (S.screen === 'join') renderJoin?.();
+  if (S.screen === 'join') renderJoinSub(); // not renderJoin: that restarts the camera preview
 }
 // Forgets the tokens and asks Zoom to revoke them (Zoom's uninstall rule).
 async function signOut() {
@@ -546,6 +557,7 @@ async function signOut() {
     if (!j.revoked) showError("Signed out here, but Zoom didn't confirm revoking access. Remove the app at marketplace.zoom.us → Manage → Added apps.");
   } catch { showError("Couldn't sign out"); }
   renderSettings();
+  if (S.screen === 'join') renderJoinSub();
 }
 // "New meeting": Zoom creates an instant meeting for the signed-in user, and
 // the join screen then starts it as host (the same preview and Join as a link).
@@ -784,12 +796,11 @@ async function start() {
   try { launch = await api('/api/launch'); } catch {}
   const q = new URLSearchParams(location.search).get('m');
   const l = q ? parseLink(q) : launch && launch.number ? { number: launch.number, pwd: launch.pwd || '', link: launch.link } : null;
-  try {
-    await zc.init($('zoomRoot'), onEvent);
-  } catch (e) {
-    showError('Zoom failed to start: ' + (e.reason || e.message || e));
-  }
+  // Show the screen first; loading Zoom takes a second or more, and Join
+  // waits for it (zcReady).
+  zcReady = zc.init($('zoomRoot'), onEvent).catch((e) => showError('Zoom failed to start: ' + (e.reason || e.message || e)));
   if (l) openLink(l); else go('idle');
+  await zcReady;
   // Live tests (scripts/phone/live-test.sh): ?autojoin&name=X joins at once;
   // ?script=a,b,… then runs one UI action every 6 s (the same act() as a
   // click; "say:<text>" sends a chat message).

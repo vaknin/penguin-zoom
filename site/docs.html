@@ -52,7 +52,7 @@
 
     <h2 id="prerequisites">1. Prerequisites</h2>
     <ul>
-      <li>Arch Linux or an Arch-based distribution.</li>
+      <li>Arch Linux or an Arch-based distribution, Ubuntu 24.04 LTS, or Fedora 45. Meetings with audio and video have been tested on Arch; on Ubuntu 24.04 and Fedora 45 the app has been tested to build and start.</li>
       <li>WebKitGTK 4.1, GTK 3, GStreamer plugins and libsecret (installed in step 1 of <a href="#install">Install</a>).</li>
       <li>PipeWire (with its PulseAudio compatibility) or PulseAudio, for sound and speaker choice.</li>
       <li>For screen sharing on Wayland: <code>xdg-desktop-portal</code> with a backend for your desktop (for example <code>xdg-desktop-portal-hyprland</code>).</li>
@@ -63,9 +63,15 @@
     <h2 id="install">2. Install the app</h2>
     <p>The app is built from source and installed for your user only, in your home folder. There is no prebuilt package yet.</p>
     <ol>
-      <li>Install the build tools and the libraries the app needs:
+      <li>Install the build tools and the libraries the app needs. Rust 1.85 or newer is needed.
+        <p>Arch and Arch-based distributions:</p>
 <pre><code>sudo pacman -S --needed base-devel git rust npm webkit2gtk-4.1 gtk3 gst-plugins-good gst-plugins-bad gst-libav gst-plugin-pipewire libpulse libsecret xdg-utils</code></pre>
-      Rust 1.85 or newer is needed.</li>
+        <p>Ubuntu 24.04 LTS (Ubuntu's own Rust is too old, so Rust comes from rustup):</p>
+<pre><code>sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libdbus-1-dev gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-pipewire libpulse-dev pulseaudio-utils libsecret-tools xdg-utils build-essential pkg-config nodejs npm curl ca-certificates git
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. ~/.cargo/env</code></pre>
+        <p>Fedora 45 (everything comes from Fedora's own repositories):</p>
+<pre><code>sudo dnf install -y webkit2gtk4.1-devel gtk3-devel gstreamer1-devel gstreamer1-plugins-base-devel dbus-devel gstreamer1-plugins-good gstreamer1-plugins-bad-free gstreamer1-plugin-libav pipewire-gstreamer pulseaudio-libs-devel pulseaudio-utils libsecret xdg-utils gcc make pkgconf-pkg-config nodejs npm git cargo rust</code></pre></li>
       <li>Get the source:
 <pre><code>git clone https://github.com/vaknin/penguin-zoom ~/.local/src/penguin-zoom</code></pre></li>
       <li>Build and install it (no sudo; this takes a few minutes and downloads Zoom's Meeting SDK, so it needs a network connection):
@@ -84,7 +90,7 @@
       <li>Open Settings: click the gear at the top right of the window, or press <kbd>,</kbd>.</li>
       <li>Under <strong>Account</strong>, choose <strong>Sign in</strong>.</li>
       <li>Zoom's own sign-in page opens in your default web browser. Sign in with your Zoom account. We never see your password.</li>
-      <li>Zoom shows what the app asks for: a join token (ZAK) for your account and your basic profile. Choose <strong>Allow</strong>.</li>
+      <li>Zoom shows what the app asks for: a join token (ZAK) for your account, your basic profile, and permission to create meetings for you (used only by <strong>New meeting</strong>). Choose <strong>Allow</strong>.</li>
       <li>The browser tab says you are signed in, and you can close it. Back in the app, Settings shows "Signed in as" your name and email.</li>
     </ol>
     <p>The app keeps your sign-in in your system keyring (for example GNOME Keyring), so it lasts across restarts until you sign out. If sign-in fails, see <a href="#troubleshooting">Troubleshooting</a>.</p>
@@ -97,6 +103,13 @@
       <li><strong>From a terminal</strong>: <code>penguin-zoom "https://zoom.us/j/123456789?pwd=…"</code>. If Penguin is already running, the link goes to the open window.</li>
     </ul>
     <p>The passcode in the link is used automatically.</p>
+
+    <h3>Start a new meeting</h3>
+    <ul>
+      <li>When you are signed in, the start screen has <strong>New meeting</strong> (or press <kbd>n</kbd>). Penguin creates an instant meeting in your Zoom account and opens its join screen; choose <strong>Join</strong> to start it as host.</li>
+      <li>To invite people, open <strong>People</strong> (<kbd>p</kbd>) and choose <strong>Copy invite link</strong>: the link, meeting ID and passcode go to your clipboard.</li>
+      <li>As host you can mute participants and make someone else host from the People list.</li>
+    </ul>
 
     <h3>Join screen</h3>
     <ul>
@@ -115,9 +128,9 @@
       <li><strong>People</strong>: the list of participants (a tab next to Chat).</li>
       <li><strong>Gallery / Speaker view</strong>: switch between seeing everyone and seeing the active speaker.</li>
       <li><strong>Devices</strong>: change camera, microphone or speaker during the meeting.</li>
-      <li><strong>Breakout rooms</strong>: when the host invites you, a bar offers <strong>Join</strong> or <strong>Later</strong>. In a room, <strong>Back to main session</strong> returns you. (Creating or managing rooms is not available.)</li>
+      <li><strong>Breakout rooms</strong>: when the host invites you, a bar offers <strong>Go to room</strong> or <strong>Not now</strong>. In a room, <strong>Back to main session</strong> returns you. (Creating or managing rooms is not available.)</li>
       <li><strong>Recording and app notices</strong>: Zoom's recording and consent notices appear as usual. The button at the top left shows which apps can access the meeting's content (Zoom's Active Apps Notifier).</li>
-      <li><strong>Leave</strong>: the red Leave button, <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd>, or closing the window.</li>
+      <li><strong>Leave</strong>: the red Leave button, <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd>, or closing the window. If you are the host and others are in the meeting, Penguin asks whether to <strong>Leave</strong> (Zoom passes host to someone else) or <strong>End for all</strong>.</li>
     </ul>
     <p>The control bar hides after a few idle seconds and returns when you move the mouse (you can turn this off in Settings).</p>
 
@@ -140,6 +153,7 @@
         <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd></td><td>Leave the meeting</td></tr>
         <tr><td><kbd>Enter</kbd></td><td>Join (on the join screen)</td></tr>
         <tr><td><kbd>Ctrl</kbd> <kbd>V</kbd></td><td>Open a pasted meeting link (on the start screen)</td></tr>
+        <tr><td><kbd>n</kbd></td><td>New meeting (on the start screen, when signed in)</td></tr>
       </tbody>
     </table>
     </div>
@@ -175,7 +189,7 @@ penguin-zoom --cmd raise</code></pre>
     <h2 id="remove">9. Remove the app</h2>
     <p>Do any or all of these, in this order:</p>
     <ol>
-      <li><strong>Sign out</strong>: Settings (<kbd>,</kbd>) → Account → <strong>Sign out</strong>. This revokes the app's access token with Zoom and deletes the saved sign-in from your keyring.</li>
+      <li><strong>Sign out</strong>: Settings (<kbd>,</kbd>) → Account → <strong>Sign out</strong>. This deletes the saved sign-in from your keyring and asks Zoom to revoke the app's access token. If Zoom doesn't confirm, the app says so; then remove the app from your Zoom account (next step).</li>
       <li><strong>Remove the app from your Zoom account</strong>: sign in at <a href="https://marketplace.zoom.us/user/installed">marketplace.zoom.us/user/installed</a>, find <strong>Penguin for Zoom</strong>, and choose <strong>Remove</strong>. This cancels all access the app had to your account, even on other computers.</li>
       <li><strong>Uninstall the program</strong>:
 <pre><code>~/.local/src/penguin-zoom/scripts/install-user.sh --remove</code></pre></li>
@@ -202,7 +216,7 @@ rm -rf ~/.local/src/penguin-zoom</code></pre></li>
     <h2 id="troubleshooting">10. Troubleshooting</h2>
     <h3>Installing</h3>
     <ul>
-      <li><strong>The build fails</strong>: update your system (<code>sudo pacman -Syu</code>), check that the packages in step 1 of <a href="#install">Install</a> are installed and that <code>cargo --version</code> is 1.85 or newer, then run the script again.</li>
+      <li><strong>The build fails</strong>: update your system, check that the packages in step 1 of <a href="#install">Install</a> are installed and that <code>cargo --version</code> is 1.85 or newer, then run the script again.</li>
       <li><strong>The window opens blank</strong>: start <code>penguin-zoom</code> from a terminal and read the messages. Make sure WebKitGTK 4.1 (<code>webkit2gtk-4.1</code>) is installed and up to date.</li>
       <li><strong>Clicking a meeting link opens another Zoom app</strong>: set Penguin as the handler with <code>xdg-mime default penguin-zoom.desktop x-scheme-handler/zoommtg x-scheme-handler/zoomus</code>.</li>
     </ul>

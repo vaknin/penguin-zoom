@@ -107,14 +107,16 @@ function go(screen) {
   if (screen === 'join') renderJoin();
   else zc.previewStop();
   if (screen === 'meeting') renderMeeting();
-  else { setPanel(null); body.classList.remove('idle-hide', 'in-waiting'); }
+  else { setPanel(null); S.leaveAsk = false; body.classList.remove('idle-hide', 'in-waiting'); }
 }
 
 // ---------- join ----------
 function renderJoin() {
-  $('joinTitle').textContent = S.meet.topic && S.meet.joined ? S.meet.topic : 'Meeting ' + fmtNumber(S.launch.number);
+  $('joinTitle').textContent = S.meet.topic && S.meet.joined ? S.meet.topic
+    : (S.launch.host ? 'New meeting ' : 'Meeting ') + fmtNumber(S.launch.number);
   $('joinSub').textContent = S.account.signedIn ? `Signed in${S.account.user ? ' as ' + S.account.user : ''}` : 'Joining as a guest';
   $('joinName').value = $('joinName').value || S.settings.name || '';
+  if (!$('joinName').value) $('joinName').focus(); // typing goes to the name, not to shortcuts
   renderJoinToggles();
   startPreview();
 }
@@ -157,7 +159,7 @@ async function doJoin(e) {
   $('joinBtn').textContent = 'Joining…';
   try {
     await zc.join(JSON.stringify({
-      number: S.launch.number, pwd: S.launch.pwd, name,
+      number: S.launch.number, pwd: S.launch.pwd, name, host: !!S.launch.host,
       muted: !S.joinMic, cameraOff: !S.joinCam, signedIn: S.account.signedIn,
     }));
     S.chatCount = 0; S.unread = 0;
@@ -297,6 +299,8 @@ function setPanel(p) {
     $('tabPeople').setAttribute('aria-selected', p === 'people');
     $('chatView').hidden = p !== 'chat';
     $('peopleList').hidden = p !== 'people';
+    $('inviteRow').hidden = p !== 'people' || !S.launch;
+    if (S.launch) $('inviteInfo').textContent = `ID ${fmtNumber(S.launch.number)}${S.launch.pwd ? ' · passcode ' + S.launch.pwd : ''}`;
     if (p === 'chat') { S.unread = 0; setTimeout(() => $('chatInput').focus(), 0); }
     if (p === 'people') renderPeople();
   }
@@ -354,7 +358,7 @@ function renderToast() {
   // a second, and replacing the buttons mid-click would swallow the click.
   const hostName = (S.meet.users.find((u) => u.host && !u.me) || {}).name || '';
   const key = JSON.stringify([S.error, S.screen === 'meeting', b.status, b.room && b.room.id, b.room && b.room.name,
-    b.canReturn, S.inviteDismissed, hostName]);
+    b.canReturn, S.inviteDismissed, hostName, S.leaveAsk]);
   if (key === toastKey) return;
   toastKey = key;
   const parts = [];
@@ -376,6 +380,9 @@ function renderToast() {
   if (S.error) {
     t.classList.add('error');
     parts.push(text(S.error), btn('Dismiss', '', 'dismiss-error'));
+  } else if (S.screen === 'meeting' && S.leaveAsk) {
+    parts.push(text('Leave, or end the meeting for everyone?'),
+      btn('Cancel', '', 'leave-cancel'), btn('Leave', '', 'leave-only'), btn('End for all', 'go', 'end-all'));
   } else if (S.screen === 'meeting' && b.status === 'invited' && b.room && S.inviteDismissed !== b.room.id) {
     const host = S.meet.users.find((u) => u.host && !u.me);
     parts.push(text(`${host ? host.name : 'The host'} invited you to `, b.room.name),
@@ -509,6 +516,7 @@ function renderSettings() {
   btn.hidden = !a.signedIn && !a.configured;
   btn.dataset.action = a.signedIn ? 'signout' : 'signin';
   btn.textContent = a.signedIn ? 'Sign out' : 'Sign in';
+  $('newMeeting').hidden = !a.signedIn;
 }
 // Sign-in runs in the user's default browser (their saved passwords live
 // there); Zoom returns to our local server, which sends an 'account' event.
@@ -527,7 +535,7 @@ async function refreshAccount() {
   renderSettings();
   if (S.screen === 'join') renderJoin?.();
 }
-// Revokes the app's Zoom access (Zoom's uninstall rule) and forgets the tokens.
+// Forgets the tokens and asks Zoom to revoke them (Zoom's uninstall rule).
 async function signOut() {
   try {
     const r = await fetch('/api/signout', { method: 'POST' });
@@ -536,6 +544,38 @@ async function signOut() {
     if (!j.revoked) showError("Signed out here, but Zoom didn't confirm revoking access. Remove the app at marketplace.zoom.us → Manage → Added apps.");
   } catch { showError("Couldn't sign out"); }
   renderSettings();
+}
+// "New meeting": Zoom creates an instant meeting for the signed-in user, and
+// the join screen then starts it as host (the same preview and Join as a link).
+async function newMeeting() {
+  if (S.creating || S.screen === 'meeting') return;
+  S.creating = true;
+  $('newMeeting').disabled = true;
+  try {
+    const r = await fetch('/api/new-meeting', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) openLink({ number: j.number, pwd: j.pwd || '', link: j.link || '', host: true });
+    else {
+      showError(j.error || "Couldn't create a meeting");
+      if (j.reauth) signIn(); // signed in before Penguin could create meetings
+    }
+  } catch { showError("Couldn't create a meeting"); }
+  S.creating = false;
+  $('newMeeting').disabled = false;
+}
+// The invitation others need: the meeting's https link when we have one (from
+// Zoom or the link the user opened), then the ID and passcode.
+async function copyInvite(btn) {
+  const l = S.launch;
+  if (!l) return;
+  const lines = ['Join my Zoom meeting'];
+  if (/^https:\/\//.test(l.link || '')) lines.push(l.link);
+  lines.push(`Meeting ID: ${fmtNumber(l.number)}`);
+  if (l.pwd) lines.push(`Passcode: ${l.pwd}`);
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'));
+    if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy invite link'; }, 2000); }
+  } catch { showError("Couldn't copy the invite"); }
 }
 function applyStyle() { body.dataset.style = S.settings.style === 'keyboard' ? 'keyboard' : 'standard'; requestAnimationFrame(() => zc.fit()); }
 
@@ -584,6 +624,8 @@ function runCmd(cmd) {
 function act(a, el) {
   switch (a) {
     case 'preview-resume': S.previewHold = false; startPreview(); break;
+    case 'new-meeting': newMeeting(); break;
+    case 'copy-invite': copyInvite(el); break;
     case 'join-mic': S.previewHold = false; S.joinMic = !S.joinMic; renderJoinToggles(); startPreview(); break;
     case 'join-cam': S.previewHold = false; S.joinCam = !S.joinCam; renderJoinToggles(); startPreview(); break;
     case 'devices': S.devicesOpen ? closeDevices() : openDevices(el); break;
@@ -604,7 +646,16 @@ function act(a, el) {
       zc.view(S.view);
       renderMeeting();
       break;
-    case 'leave': zc.leave(); break;
+    case 'leave': {
+      // A host with others in the meeting chooses, as in Zoom: leave (Zoom
+      // hands host to someone else) or end it for everyone.
+      const me = S.meet.users.find((u) => u.me);
+      if (me && me.host && S.meet.users.length > 1) { S.leaveAsk = true; renderToast(); } else zc.leave();
+      break;
+    }
+    case 'leave-cancel': S.leaveAsk = false; renderToast(); break;
+    case 'leave-only': S.leaveAsk = false; renderToast(); zc.leave(); break;
+    case 'end-all': S.leaveAsk = false; renderToast(); zc.end(); break;
     case 'invite-later': S.inviteDismissed = S.breakout.room?.id; renderToast(); break;
     case 'invite-join': if (S.breakout.room) zc.breakoutJoin(S.breakout.room.id); break;
     case 'breakout-leave': zc.breakoutLeave(); break;
@@ -676,6 +727,7 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.altKey || e.metaKey) return;
   const k = e.key.toLowerCase();
   if (k === ',') { openSettings(); return; }
+  if (S.screen === 'idle' && k === 'n' && S.account.signedIn) { act('new-meeting'); return; }
   if (k === 'd') { act('devices', S.screen === 'meeting' ? $('btnDevices') : null); return; }
   if (S.screen === 'join') {
     if (k === 'm') act('join-mic');
@@ -774,6 +826,7 @@ async function start() {
       }
       if (step === 'devlist') { try { tlog('devlist ' + JSON.stringify(await zc.devices())); } catch (e) { tlog('devlist failed ' + e); } continue; }
       if (step.startsWith('cam:')) { tlog('useCamera ' + await zc.useCamera(step.slice(4))); continue; }
+      if (step.startsWith('mic:')) { tlog('useMic ' + await zc.useMic(step.slice(4))); continue; }
       if (step === 'vstats') { try { tlog('vstats ' + JSON.stringify(await zc.videoStats())); } catch (e) { tlog('vstats failed ' + e); } continue; }
       if (step === 'layout') { try { tlog('layout ' + JSON.stringify(zc.layout())); } catch (e) { tlog('layout failed ' + e); } continue; }
       if (step === 'dump') { try { tlog('dump ' + JSON.stringify(zc.debug())); } catch (e) { tlog('dump failed ' + e); } continue; }

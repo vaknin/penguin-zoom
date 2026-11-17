@@ -27,7 +27,7 @@
 <main id="main">
   <div class="wrap">
     <h1>Privacy Policy</h1>
-    <p class="meta">Effective date: 15 November 2026 · Last updated: 15 November 2026</p>
+    <p class="meta">Effective date: 15 November 2026 · Last updated: 17 November 2026</p>
 
     <div class="notice" role="note">
       <p><strong>Short version.</strong> Penguin for Zoom keeps its settings on your computer. Your meeting audio, video, screen share and chat go directly between your computer and Zoom; we never see them. Our only server creates the join signature Zoom requires and keeps nothing about you after the request. No analytics, no cookies, no tracking, no ads, and we never sell or share your data.</p>
@@ -71,7 +71,8 @@
       <tbody>
         <tr><td>Settings: join muted, join with camera off, interface style, hide controls when idle, follow desktop theme, chosen speaker, and the display name you last joined with</td><td>Your computer only, in <code>~/.config/penguin-zoom/settings.json</code></td><td>Nobody. (The display name is sent to Zoom when you join; see next row.)</td><td>Until you change or delete the file</td></tr>
         <tr><td>Display name you type on the join screen</td><td>Your settings file</td><td>Zoom, when you join, so other participants see it</td><td>On your computer: until you change it. At Zoom: per Zoom's policy</td></tr>
-        <tr><td>Meeting number and passcode (from the link you open)</td><td>App memory while it runs</td><td>Zoom (both, to join). Our signing service (meeting number only, see <a href="#signer">section 5</a>)</td><td>Gone when the app quits. Not stored by our signing service</td></tr>
+        <tr><td>Meeting number and passcode (from the link you open, or of a meeting you start with New meeting)</td><td>App memory while it runs</td><td>Zoom (both, to join). Our signing service (meeting number only, see <a href="#signer">section 5</a>)</td><td>Gone when the app quits. Not stored by our signing service</td></tr>
+        <tr><td>Meetings you start with New meeting</td><td>Created by Zoom in your Zoom account, as an instant meeting; the app keeps only its number, passcode and invite link, in memory</td><td>Zoom (it creates and hosts the meeting); the people you send the invite link to</td><td>In the app: until you quit. At Zoom: as for any meeting you create, per Zoom's policy</td></tr>
         <tr><td>Zoom sign-in tokens (OAuth access token and refresh token)</td><td>Access token: app memory only. Refresh token: your system keyring (for example GNOME Keyring), so you stay signed in after a restart; never in a plain file</td><td>Zoom's API. For joining as host only, the access token is sent to our signing service for a one-time check</td><td>Access token until you quit; refresh token until you sign out, Zoom rejects it, or it expires (Zoom: 90 days)</td></tr>
         <tr><td>Your name and email address from your Zoom profile</td><td>App memory only; never written to disk</td><td>Nobody; shown to you in Settings ("Signed in as …")</td><td>Until you sign out or quit the app</td></tr>
         <tr><td>ZAK (Zoom's short-lived join token for your account)</td><td>App memory, for the few seconds of joining</td><td>Zoom (it goes back to Zoom to join the meeting as you)</td><td>Discarded after the join; it expires within minutes</td></tr>
@@ -93,9 +94,10 @@
     <ul>
       <li><strong>A ZAK</strong> (scope <code>user:read:token</code>): a short-lived token that lets the app join a meeting as you. It is fetched right before each join and handed back to Zoom.</li>
       <li><strong>Your basic profile</strong> (scope <code>user:read:user</code>): used only to show "Signed in as <em>your name (your email)</em>" in Settings, so you can see which Zoom account you are using. Zoom's answer contains other profile fields; the app keeps only your first name, last name and email address, in memory.</li>
+      <li><strong>Permission to create meetings for you</strong> (scope <code>meeting:write:meeting</code>): used only when you press <strong>New meeting</strong>, to create one instant meeting in your account that you then start as host. The app never edits, deletes or lists your meetings.</li>
     </ul>
-    <p>The app does not read your meetings list, contacts, recordings, chat history or any other Zoom data, and it does not change anything in your Zoom account.</p>
-    <p>The access token is held only in the memory of the running app. The refresh token, which keeps you signed in after a restart, is stored in your system keyring (for example GNOME Keyring), never in a plain file. "Sign out" in Settings revokes the token with Zoom and deletes both.</p>
+    <p>The app does not read your meetings list, contacts, recordings, chat history or any other Zoom data, and it changes nothing in your Zoom account except creating the meetings you start with New meeting.</p>
+    <p>The access token is held only in the memory of the running app. The refresh token, which keeps you signed in after a restart, is stored in your system keyring (for example GNOME Keyring), never in a plain file. "Sign out" in Settings deletes both and asks Zoom to revoke the token. If Zoom does not confirm the revocation, the app tells you so; removing the app at <a href="https://marketplace.zoom.us/user/installed">marketplace.zoom.us/user/installed</a> ends its access.</p>
 
     <h2 id="signer">5. Our signing service</h2>
     <p>Zoom requires every join to carry a signature made with the app's secret key. To keep that key off your computer, a small service we run on Oracle Cloud (over HTTPS) creates it. For each join it receives:</p>
@@ -109,7 +111,7 @@
 
     <h2 id="purposes">6. Why we use data, and legal bases</h2>
     <ul>
-      <li><strong>To let you join meetings</strong> (meeting number, role, display name, tokens, ZAK): needed to provide the app you asked to use (performance of a contract).</li>
+      <li><strong>To let you join and start meetings</strong> (meeting number, role, display name, tokens, ZAK, meetings you create): needed to provide the app you asked to use (performance of a contract).</li>
       <li><strong>To protect the signing service from abuse</strong> (IP address in memory, token check): our legitimate interest in keeping the service available and secure.</li>
       <li><strong>To answer support requests</strong> (what you send us): to provide the service you asked for, and our legitimate interest in fixing problems.</li>
     </ul>
@@ -157,7 +159,7 @@
     <p>Penguin is not directed to children under 16, and we do not knowingly collect personal information from them. Zoom's own age rules also apply to Zoom accounts. If you believe a child has sent us personal information, contact us and we will delete it.</p>
 
     <h2 id="changes">14. Changes to this policy</h2>
-    <p>If we change this policy, we will update the date at the top and keep the previous versions in the site's public history on GitHub. If a change affects what data we collect or how it is shared, we will also note it in the app's release notes before it takes effect.</p>
+    <p>If we change this policy, we will update the date at the top and keep the previous versions in the site's public history on GitHub. If a change affects what data we collect or how it is shared, we will also announce it on this website's home page before it takes effect.</p>
 
     <h2 id="contact">15. Contact</h2>
     <p>Aviv Vaknin · Email: dibs.apps@gmail.com · General questions: <a href="https://github.com/vaknin/penguin-zoom/issues">GitHub Issues</a> (public; do not post personal information there).</p>

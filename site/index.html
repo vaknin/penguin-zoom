@@ -27,7 +27,7 @@
 <main id="main">
   <div class="wrap">
     <h1>Penguin for Zoom</h1>
-    <p class="lead">A light Linux desktop app for joining Zoom meetings. It opens Zoom meeting links in a small native window that fits Wayland tiling desktops such as Hyprland, with keyboard controls and global mute and leave keys.</p>
+    <p class="lead">A light Linux desktop app for joining and starting Zoom meetings. It opens Zoom meeting links in a small native window that fits Wayland tiling desktops such as Hyprland, with keyboard controls and global mute and leave keys.</p>
 
     <div class="notice" role="note">
       <p><strong>Penguin for Zoom is an independent app.</strong> It is not made, endorsed, sponsored or supported by Zoom Communications, Inc. "Zoom" is used only to say which service the app works with. Zoom is a trademark of Zoom Communications, Inc.</p>
@@ -42,6 +42,7 @@
     <h2>What it does</h2>
     <div class="cards">
       <div class="card"><h3>Opens meeting links</h3><p>Click a Zoom meeting link anywhere, or paste one with <kbd>Ctrl</kbd> <kbd>V</kbd>, and it opens in Penguin.</p></div>
+      <div class="card"><h3>Starts meetings</h3><p>Signed in, press New meeting to start an instant meeting as host, then copy the invite link from the people list.</p></div>
       <div class="card"><h3>Join screen</h3><p>Camera preview, microphone and camera toggles, device choice and your display name before you join.</p></div>
       <div class="card"><h3>In the meeting</h3><p>Mute, camera, screen share, chat, people list, gallery or speaker view, breakout rooms as a participant.</p></div>
       <div class="card"><h3>Keyboard first</h3><p>Single-key controls in the window, and desktop-wide mute and leave keys you can set in any desktop.</p></div>
@@ -51,22 +52,22 @@
 
     <h2>How it works</h2>
     <p>Penguin is a Linux desktop app that shows Zoom's own Meeting SDK for Web inside a WebKitGTK window. Your audio, video, screen share and chat go directly between your computer and Zoom. Zoom's <a href="https://www.zoom.com/en/trust/terms/">Terms of Service</a> and <a href="https://www.zoom.com/en/trust/privacy/privacy-statement/">Privacy Statement</a> apply to the meeting itself.</p>
-    <p>You sign in with your own Zoom account, and the app joins meetings as you. The only server we run is a small signing service that creates the short-lived join signature Zoom requires. Details are in the <a href="privacy.html">privacy policy</a>.</p>
+    <p>You sign in with your own Zoom account, and the app joins and starts meetings as you. The only server we run is a small signing service that creates the short-lived join signature Zoom requires. Details are in the <a href="privacy.html">privacy policy</a>.</p>
 
     <h2>Requirements</h2>
     <ul>
-      <li>Arch Linux (or an Arch-based distribution) with WebKitGTK 4.1, GStreamer and PipeWire or PulseAudio.</li>
+      <li>Arch Linux (or an Arch-based distribution), Ubuntu 24.04 LTS or Fedora 45, with WebKitGTK 4.1, GStreamer and PipeWire or PulseAudio.</li>
       <li>A Zoom account to sign in with.</li>
       <li>Works on any Linux desktop; tested on Wayland with Hyprland.</li>
     </ul>
 
     <h2>Install</h2>
-    <p>Build it from source for your user (no prebuilt package yet), then start <code>penguin-zoom</code> from your app launcher or a terminal:</p>
+    <p>Build it from source for your user (no prebuilt package yet), then start <code>penguin-zoom</code> from your app launcher or a terminal. On Arch:</p>
 <pre><code>sudo pacman -S --needed base-devel git rust npm webkit2gtk-4.1 gtk3 gst-plugins-good gst-plugins-bad gst-libav gst-plugin-pipewire libpulse libsecret xdg-utils
 git clone https://github.com/vaknin/penguin-zoom ~/.local/src/penguin-zoom
 ~/.local/src/penguin-zoom/scripts/install-user.sh
 penguin-zoom</code></pre>
-    <p>Full steps, including sign-in, keyboard keys and how to remove the app, are in the <a href="docs.html">documentation</a>.</p>
+    <p>The package lines for Ubuntu 24.04 and Fedora 45 are in the <a href="docs.html#install">documentation</a>. Meetings have been tested on Arch; on Ubuntu 24.04 and Fedora 45 the app has been tested to build and start. Full steps, including sign-in, keyboard keys and how to remove the app, are in the <a href="docs.html">documentation</a>.</p>
 
     <h2>Links</h2>
     <ul>

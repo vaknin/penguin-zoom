@@ -1,0 +1,16 @@
+Penguin for Zoom: Linux desktop app (Rust, system WebKitGTK 4.1) using the Zoom Meeting SDK for Web 6.10.0, component view, unmodified. Sign-in: OAuth public client + PKCE, no secret in the app. Our hosted signer holds the SDK secret and signs role 1 only after verifying the user's token with Zoom.
+
+INSTALL (from source; no prebuilt package yet)
+Arch: sudo pacman -S --needed base-devel git rust npm webkit2gtk-4.1 gtk3 gst-plugins-good gst-plugins-bad gst-libav gst-plugin-pipewire libpulse libsecret xdg-utils xdg-desktop-portal
+git clone https://github.com/vaknin/penguin-zoom && cd penguin-zoom && scripts/install-user.sh
+Run: penguin-zoom. Ubuntu 24.04 / Fedora 45 packages: https://penguin.kitah.co.il/docs.html#install (meetings tested on Arch).
+
+TEST PLAN
+1. Settings (gear or ",") > Sign in. Zoom's authorize page opens in the default browser; Allow. Settings shows "Signed in as <name> (<email>)" (user:read:user).
+2. New meeting (start screen, or "n"): creates an instant meeting (meeting:write:meeting), join screen, Join: you are host. People (p) > Copy invite link; join from another device.
+3. Join a meeting: paste a link (Ctrl+V) or click a zoommtg link. Join screen: preview, mic meter, devices. You join as yourself with a ZAK (user:read:token).
+4. In the meeting: mute (m), video (v), share (s; portal picker), chat (c), people (p), gallery/speaker (g), devices (d), breakout rooms as participant. Zoom's recording/consent notices, chat audience notice and Active Apps button stay visible.
+5. Leave (Ctrl+Shift+L or closing the window). As host with others present: Leave or End for all.
+6. Settings > Sign out: deletes the token from the keyring and calls Zoom's revoke endpoint (Zoom currently answers invalid_client for public clients), so the app also points to removing the app in Marketplace, which triggers our deauthorization endpoint.
+
+Only a Zoom account is needed. Contact: dibs.apps@gmail.com

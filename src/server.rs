@@ -129,6 +129,7 @@ pub async fn run(root: PathBuf, listener: std::net::TcpListener, launch: Option<
         .route("/api/window", post(window_action))
         .route("/api/signature", post(signature))
         .route("/api/zak", get(zak))
+        .route("/api/new-meeting", post(new_meeting))
         .route("/api/status", get(status))
         .route("/api/signout", post(signout))
         .route("/api/log", post(log))
@@ -714,6 +715,48 @@ async fn zak(State(s): State<AppState>) -> Response {
     err(StatusCode::BAD_GATEWAY, &last)
 }
 
+/// "New meeting": creates an instant meeting for the signed-in user
+/// (POST /v2/users/me/meetings, scope meeting:write:meeting) and returns its
+/// number and passcode; the page then starts it as host. A sign-in from before
+/// the scope was added gets 401/403 with `reauth: true`, so the page can ask
+/// the user to sign in again.
+async fn new_meeting(State(s): State<AppState>) -> Response {
+    let Some(access) = access_token(&s).await else {
+        return err(StatusCode::UNAUTHORIZED, "not signed in");
+    };
+    let r = match s
+        .http
+        .post(format!("{}/v2/users/me/meetings", s.zoom_api))
+        .bearer_auth(&access)
+        .json(&json!({ "type": 1 }))
+        .send()
+        .await
+    {
+        Ok(r) => r,
+        Err(e) => return err(StatusCode::BAD_GATEWAY, &format!("Zoom unreachable: {e}")),
+    };
+    let st = r.status();
+    let v: serde_json::Value = r.json().await.unwrap_or_default();
+    // Zoom sends the meeting ID as a JSON number.
+    let number = v["id"].as_u64().map(|n| n.to_string()).or_else(|| v["id"].as_str().map(str::to_owned));
+    if let (true, Some(number)) = (st.is_success(), number) {
+        eprintln!("[meeting] created …{}", &number[number.len().saturating_sub(3)..]);
+        return Json(json!({ "number": number, "pwd": v["password"].as_str().unwrap_or(""), "link": v["join_url"] }))
+            .into_response();
+    }
+    eprintln!("[meeting] create: {st} {}", redact(&v));
+    // Missing scope: 400 with code 4711 ("does not contain scopes"), or 401/403.
+    if v["code"] == 4711 || st == StatusCode::UNAUTHORIZED || st == StatusCode::FORBIDDEN {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({ "error": "Sign in again to let Penguin create meetings", "reauth": true })),
+        )
+            .into_response();
+    }
+    let msg = v["message"].as_str().unwrap_or("could not create the meeting");
+    err(StatusCode::BAD_GATEWAY, &format!("Zoom: {msg} ({st})"))
+}
+
 /// Sign out: revoke the token at Zoom (Zoom's rule for removing an app) and
 /// forget it here either way. Public client, so client_id goes in the body.
 /// Whether Zoom accepts revoke from a public client is unconfirmed;
@@ -1092,6 +1135,17 @@ mod tests {
         match uri.path() {
             "/v2/users/me/token" => Json(json!({"token": format!("zak-for-{}", &auth[7..])})).into_response(),
             "/v2/users/me" => Json(json!({"first_name": "Test", "last_name": "User", "email": "test@example.com"})).into_response(),
+            // a5 stands for a sign-in from before meeting:write:meeting was added.
+            "/v2/users/me/meetings" if auth == "Bearer a5" => (
+                StatusCode::BAD_REQUEST,
+                Json(json!({"code": 4711, "message": "Invalid access token, does not contain scopes:[meeting:write:meeting]."})),
+            )
+                .into_response(),
+            "/v2/users/me/meetings" => (
+                StatusCode::CREATED,
+                Json(json!({"id": 81234567890u64, "password": "pw1", "join_url": "https://zoom.us/j/81234567890?pwd=x"})),
+            )
+                .into_response(),
             _ => StatusCode::NOT_FOUND.into_response(),
         }
     }
@@ -1201,5 +1255,20 @@ mod tests {
         assert_eq!(*fake.revoked.lock().await, vec!["a1".to_string()]);
         let sess = s.session.lock().await;
         assert!(sess.refresh_token.is_none() && sess.access_token.is_none() && sess.keyring_checked);
+    }
+
+    #[tokio::test]
+    async fn new_meeting_returns_number_and_passcode_or_asks_to_sign_in_again() {
+        let (s, _) = fake_zoom(None).await;
+        assert_eq!(new_meeting(State(s)).await.status(), StatusCode::UNAUTHORIZED);
+
+        let (s, _) = fake_zoom(Some("r1")).await;
+        let v = body_json(new_meeting(State(s)).await).await;
+        assert_eq!((v["number"].as_str(), v["pwd"].as_str()), (Some("81234567890"), Some("pw1")));
+
+        let (s, _) = fake_zoom(Some("r5")).await;
+        let res = new_meeting(State(s)).await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        assert_eq!(body_json(res).await["reauth"], true);
     }
 }

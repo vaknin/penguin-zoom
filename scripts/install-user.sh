@@ -40,6 +40,7 @@ if [[ ! -f "$ROOT/assets/zoom-sdk/VERSION" ]]; then
 fi
 
 echo "==> installing to $SHARE"
+mkdir -p "$DATA" # a fresh account may not have ~/.local/share yet
 stage="$(mktemp -d "$DATA/.penguin-zoom.XXXXXX")"
 trap 'rm -rf "$stage"' EXIT
 mkdir -p "$stage/assets"
@@ -61,8 +62,15 @@ install -m644 "$ROOT/packaging/penguin-zoom.svg" "$ICONS/penguin-zoom.svg"
 # Absolute Exec: launchers started outside a login shell may not have ~/.local/bin on PATH.
 sed "s|^Exec=penguin-zoom|Exec=$BIN/penguin-zoom|" "$ROOT/packaging/penguin-zoom.desktop" > "$APPS/penguin-zoom.desktop"
 command -v update-desktop-database >/dev/null && update-desktop-database "$APPS" || true
-# Zoom links open Penguin (the handler is per user anyway).
+# Zoom links open Penguin (the handler is per user anyway). xdg-mime writes
+# ~/.config/mimeapps.list and fails if ~/.config doesn't exist yet.
+mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}"
 xdg-mime default penguin-zoom.desktop x-scheme-handler/zoommtg x-scheme-handler/zoomus
 
 echo "==> installed: $BIN/penguin-zoom (data $SHARE)"
-[[ "$(command -v penguin-zoom)" == "$BIN/penguin-zoom" ]] || echo "note: another penguin-zoom comes first on PATH: $(command -v penguin-zoom)"
+found="$(command -v penguin-zoom || true)"
+if [[ -z $found ]]; then
+  echo "note: $BIN is not on PATH yet (log in again, or run $BIN/penguin-zoom)"
+elif [[ $found != "$BIN/penguin-zoom" ]]; then
+  echo "note: another penguin-zoom comes first on PATH: $found"
+fi

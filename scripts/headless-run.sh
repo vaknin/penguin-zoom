@@ -26,24 +26,35 @@ rm -f "$OUT/wayland-display"
 # nest into, no Hyprland instance for hyprctl (the app calls it to raise itself).
 # The app's own children (screen share, pactl) still see this env.
 NK=(PENGUIN_NO_KEYRING=1); [ -n "${USE_KEYRING:-}" ] && NK=(-u PENGUIN_NO_KEYRING)
-ZOOM_SPIKE_URL="$URL" timeout "$SECS" \
-  env -u WAYLAND_DISPLAY -u DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE -u HYPRLAND_CMD \
+ZOOM_SPIKE_URL="$URL" \
+  env -u WAYLAND_DISPLAY -u DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE -u HYPRLAND_CMD "${NK[@]}" \
       WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER="${CAGE_RENDERER:-pixman}" \
       WLR_HEADLESS_OUTPUTS=1 \
-      "${NK[@]}" \
   nice -n "${NICE:-15}" cage -- sh -c 'echo "$WAYLAND_DISPLAY" > "$0/wayland-display"; exec "$1"' "$OUT" "${BIN:-$ROOT/target/debug/penguin-zoom}" \
   >"$OUT/app.log" 2>&1 &
-APP=$!
-cleanup() { kill "$APP" 2>/dev/null || true; }
-trap cleanup EXIT
+APP=$! # cage (env and nice exec into it); the app is its child
+# Stop the app the way a desktop would (SIGTERM: it leaves the meeting and
+# exits). Killing cage first orphaned WebKit's web process, which then crashed
+# tearing down the camera stream (2026-11-17). Cage doesn't always reap or exit
+# after its child exits (seen 2026-11-17), so watch the app itself and stop
+# cage once the app is gone.
+app_alive() { ps -o stat= --ppid "$APP" 2>/dev/null | grep -q '^[^Z]'; }
+stop_app() {
+  pkill -TERM -P "$APP" 2>/dev/null || true
+  for _ in $(seq 100); do app_alive || break; sleep 0.1; done
+  kill "$APP" 2>/dev/null || true
+}
+trap stop_app EXIT
 
 start=$(date +%s)
 for _ in $(seq 50); do [ -s "$OUT/wayland-display" ] && break; sleep 0.1; done
 SOCK="$(cat "$OUT/wayland-display" 2>/dev/null || true)"
 [ -n "$SOCK" ] || echo "headless-run.sh: cage did not start (see $OUT/app.log)" >&2
 for t in "${SHOTS[@]}"; do
-  while [ $(( $(date +%s) - start )) -lt "$t" ]; do sleep 0.5; kill -0 "$APP" 2>/dev/null || break 2; done
+  while [ $(( $(date +%s) - start )) -lt "$t" ]; do sleep 0.5; app_alive || break 2; done
   [ -n "$SOCK" ] && WAYLAND_DISPLAY="$SOCK" grim "$OUT/shot-${t}s.png" 2>/dev/null || true
 done
+while [ $(( $(date +%s) - start )) -lt "$SECS" ] && app_alive; do sleep 0.5; done
+stop_app
 wait "$APP" || true
 echo "log: $OUT/app.log"

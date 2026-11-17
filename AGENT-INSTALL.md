@@ -1,8 +1,8 @@
 # Installing Penguin for Zoom (instructions for an AI agent)
 
-You are installing Penguin for Zoom for a user on an Arch Linux machine. It is one program,
-`penguin-zoom`: a Rust app that shows Zoom's Meeting SDK for Web in a WebKitGTK window. It is
-built from this repo and installed for the current user only, in their home folder, by
+You are installing Penguin for Zoom for a user on a Linux machine (Arch, Ubuntu or Fedora). It is
+one program, `penguin-zoom`: a Rust app that shows Zoom's Meeting SDK for Web in a WebKitGTK
+window. It is built from this repo and installed for the current user only, in their home folder, by
 `scripts/install-user.sh`. There is no prebuilt package. Follow these steps in order. Do not use
 sudo without asking the user first, and show them each sudo command before you run it. If a step
 fails, stop and explain why; don't retry in a loop or work around it. Only report something as
@@ -10,31 +10,69 @@ working if you checked it.
 
 **Tell the user this before you start.** The app is waiting for Zoom's app review. Until Zoom
 approves it, the app installs, opens and signs in, but joining a meeting only works for meetings
-of the developer's own Zoom account. Ask the user whether they still want it installed. Do not try
-to get around this: don't create Zoom credentials, and don't ask the user for a Zoom secret, key
-or password.
+of the developer's own Zoom account. Meetings with audio and video have been tested on Arch; on
+Ubuntu 24.04 LTS and Fedora 45 the app has been tested to build and start, not yet in a meeting.
+Ask the user whether they still want it installed. Do not try to get around this: don't create
+Zoom credentials, and don't ask the user for a Zoom secret, key or password.
 
 ## 1. Look before you change anything
 
 ```sh
-. /etc/os-release && echo "$ID ${ID_LIKE:-}"
-command -v pacman cargo npm git
+. /etc/os-release && echo "$ID ${ID_LIKE:-} $VERSION_ID"
+command -v cargo npm git && cargo --version
 ls ~/.local/bin/penguin-zoom ~/.local/src/penguin-zoom 2>/dev/null
 ```
 
-- The steps are for Arch and Arch-based distros (`ID` or `ID_LIKE` contains `arch`). On anything
-  else, stop and tell the user: there are no install steps for their distro yet.
+- Pick the install line for step 2 from `ID` and `ID_LIKE`:
+  - contains `arch` (Arch, Omarchy, Manjaro, EndeavourOS): **Arch**;
+  - contains `ubuntu` or `debian`: **Ubuntu**. It was tested on Ubuntu 24.04; on another version
+    tell the user it is untested and that package names may differ;
+  - contains `fedora`: **Fedora**. It was tested on Fedora 45; on another version tell the user
+    it is untested.
+- On anything else, stop and tell the user: there are no install steps for their distro yet.
 - If `~/.local/bin/penguin-zoom` exists, the app is already installed. Go to **Updating**.
 
 ## 2. Install the build tools and libraries (needs sudo)
+
+Run only the line for the user's distro. `cargo` must be 1.85 or newer (`cargo --version`).
+
+**Arch:**
 
 ```sh
 sudo pacman -S --needed base-devel git rust npm webkit2gtk-4.1 gtk3 gst-plugins-good \
   gst-plugins-bad gst-libav gst-plugin-pipewire libpulse libsecret xdg-utils
 ```
 
-`cargo` must be 1.85 or newer (`cargo --version`). If `cargo` or `npm` already come from a
-version manager (mise, rustup, nvm) and are new enough, leave `rust` and `npm` out of the command.
+If `cargo` or `npm` already come from a version manager (mise, rustup, nvm) and are new enough,
+leave `rust` and `npm` out of the command.
+
+**Ubuntu:**
+
+```sh
+sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libgstreamer1.0-dev \
+  libgstreamer-plugins-base1.0-dev libdbus-1-dev gstreamer1.0-plugins-good \
+  gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-pipewire libpulse-dev \
+  pulseaudio-utils libsecret-tools xdg-utils build-essential pkg-config nodejs npm curl \
+  ca-certificates git
+```
+
+Ubuntu's own Rust is too old. If `cargo` 1.85 or newer is not already installed, install Rust with
+rustup (no sudo; it changes the user's home folder, so ask first):
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+. ~/.cargo/env
+```
+
+**Fedora** (everything comes from Fedora's own repositories; RPM Fusion is not needed):
+
+```sh
+sudo dnf install -y webkit2gtk4.1-devel gtk3-devel gstreamer1-devel \
+  gstreamer1-plugins-base-devel dbus-devel gstreamer1-plugins-good \
+  gstreamer1-plugins-bad-free gstreamer1-plugin-libav pipewire-gstreamer \
+  pulseaudio-libs-devel pulseaudio-utils libsecret xdg-utils gcc make pkgconf-pkg-config \
+  nodejs npm git cargo rust
+```
 
 The app keeps the user signed in through the Secret Service (for example GNOME Keyring). If no
 keyring runs on the machine, tell the user they will have to sign in after every start.
@@ -131,8 +169,8 @@ If the app is running, restart it to use the new version.
 
 ## Uninstalling
 
-Ask the user to sign out first (Settings, Account, **Sign out**), which revokes the app's token
-with Zoom and deletes the saved sign-in from the keyring. Then:
+Ask the user to sign out first (Settings, Account, **Sign out**), which deletes the saved sign-in
+from the keyring and asks Zoom to revoke the token. Then:
 
 ```sh
 ~/.local/src/penguin-zoom/scripts/install-user.sh --remove

@@ -22,6 +22,7 @@
     <svg class="icon big" data-icon="video" aria-hidden="true"></svg>
     <h1>Open a Zoom link to join</h1>
     <p class="dim">Click a meeting link anywhere and it opens here. You can also paste one with <kbd>Ctrl</kbd> <kbd>V</kbd>.</p>
+    <button class="primary" id="newMeeting" data-action="new-meeting" hidden>New meeting</button>
     <p class="dim">Sign in and other options are in <button class="link" data-action="settings">Settings</button> (the gear at the top right, or <kbd>,</kbd>).</p>
   </div>
 </section>
@@ -102,6 +103,7 @@
         <button class="icon-btn" type="submit" aria-label="Send"><svg class="icon" data-icon="send" aria-hidden="true"></svg></button>
       </form>
     </div>
+    <div id="inviteRow" class="invite" hidden><button class="link" data-action="copy-invite">Copy invite link</button><span id="inviteInfo" class="dim"></span></div>
     <ul id="peopleList" class="people" hidden></ul>
   </aside>
 

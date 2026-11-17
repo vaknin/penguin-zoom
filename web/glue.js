@@ -642,20 +642,34 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     } catch (e) { log('warn', 'glue: no event stream ' + e.message); }
   }
 
+  async function signature(number, role) {
+    const sr = await fetch('/api/signature', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ meetingNumber: number, role }) });
+    const sj = await sr.json();
+    if (!sr.ok) throw new Error(sj.error || 'signature failed');
+    return sj.signature;
+  }
+
   async function join(optsJson) {
     const o = JSON.parse(optsJson);
     previewStop(); // free the camera for the SDK
-    const sr = await fetch('/api/signature', { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ meetingNumber: o.number, role: 0 }) });
-    const sj = await sr.json();
-    if (!sr.ok) throw new Error(sj.error || 'signature failed');
-    const opts = { signature: sj.signature, meetingNumber: o.number, password: o.pwd || '', userName: o.name || 'Linux' };
+    // o.host: a meeting the user just created ("New meeting"), started as host.
+    const opts = { signature: await signature(o.number, o.host ? 1 : 0), meetingNumber: o.number, password: o.pwd || '', userName: o.name || 'Linux' };
     if (o.signedIn) {
       const zr = await fetch('/api/zak');
       if (zr.ok) opts.zak = (await zr.json()).zak;
     }
     try {
-      await client.join(opts);
+      try {
+        await client.join(opts);
+      } catch (e) {
+        // 3008 "Meeting has not started": if it is the signed-in user's own
+        // meeting, start it as host (role 1). Zoom accepts that only when the
+        // ZAK belongs to the meeting's host; otherwise the second error shows.
+        if (!e || e.errorCode !== 3008 || !opts.zak) throw e;
+        log('info', 'glue: meeting not started; starting it as host');
+        await client.join({ ...opts, signature: await signature(o.number, 1) });
+      }
       log('info', 'glue: join resolved');
     } catch (e) {
       // Being admitted from the waiting room makes Zoom reconnect, and when
@@ -709,11 +723,21 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
       muteGuardEnd = end;
       joinTimers.push(setTimeout(end, 20000));
     }
-    let tries = 0;
+    let tries = 0, audioAt = 0;
     const at = setInterval(() => {
       tries++;
-      if (audioOn()) { clearInterval(at); applyMute(); return; }
       if (tries > 100) { clearInterval(at); return; }
+      if (audioOn()) {
+        // A mute sent while audio is still connecting can be dropped (seen
+        // when starting a meeting as host: mic live for ~2 s), so keep
+        // sending it until Zoom shows us muted. Stop once the guard ends (the
+        // user unmuted, or 20 s passed) and never undo their unmute.
+        if (!audioAt) { audioAt = Date.now(); applyMute(); }
+        if (guardMute && !client.getCurrentUser()?.muted) { if (tries % 3 === 0) applyMute(); return; }
+        clearInterval(at);
+        if (o.muted) log('info', `glue: audio up, muted after ${Date.now() - audioAt} ms`);
+        return;
+      }
       // Look quietly; press() would log a warning on every miss.
       const b = findButton(/^join audio$/i, /computer audio/i, /^audio$/i);
       if (b && tries % 15 === 1) b.click();
@@ -745,6 +769,7 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
       throw e;
     }),
     leave: () => { stopJoinTimers(); return guard('Leave', () => client.leaveMeeting())(); },
+    end: () => { stopJoinTimers(); return guard('End meeting', () => client.endMeeting())(); },
     mute: guard('Mute', (m) => { if (!m) { muteGuardEnd?.(); muteGuardEnd = null; } return client.mute(m); }),
     joinAudio: () => press(/^join audio$/i, /computer audio/i, /^audio$/i),
     // A camera without a feed (e.g. a v4l2loopback device nothing writes to)

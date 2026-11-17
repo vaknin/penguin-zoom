@@ -31,6 +31,7 @@ Prefer doing it yourself? The same steps are in [AGENT-INSTALL.md](AGENT-INSTALL
 ## How it works
 
 Click a Zoom meeting link, or paste one into the window with **Ctrl V**.<br>
+Signed in, press **New meeting** (or **n**) to start your own and copy its invite link.<br>
 Check your camera and microphone, then press **Join**.<br>
 In the meeting, **m** mutes, **v** is the camera, **s** shares your screen.
 

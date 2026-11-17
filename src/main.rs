@@ -254,8 +254,15 @@ fn main() {
                 window.set_focus();
             }
             Event::UserEvent(UiEvent::ToggleFullscreen) => {
-                let on = window.fullscreen().is_none();
-                window.set_fullscreen(on.then_some(Fullscreen::Borderless(None)));
+                // Ask GDK, not tao: tao's cached state misses fullscreen
+                // changes made by the compositor (e.g. moving the window to
+                // another workspace in Hyprland), so F11 needed two presses.
+                use gtk::prelude::*;
+                let fullscreen = window
+                    .gtk_window()
+                    .window()
+                    .is_some_and(|w| w.state().contains(gtk::gdk::WindowState::FULLSCREEN));
+                window.set_fullscreen((!fullscreen).then_some(Fullscreen::Borderless(None)));
             }
             _ => {}
         }

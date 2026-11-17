@@ -83,17 +83,8 @@
       "shortcuts": []
     },
     "event_subscription": {
-      "enable": true,
-      "events": [
-        {
-          "subscription_name": "Deauthorization",
-          "event_types": [
-            "app_deauthorized"
-          ],
-          "development_webhook_url": "https://penguin.kitah.co.il/v1/zoom-webhook",
-          "production_webhook_url": "https://penguin.kitah.co.il/v1/zoom-webhook"
-        }
-      ]
+      "enable": false,
+      "events": []
     },
     "custom_form": {
       "enable": false

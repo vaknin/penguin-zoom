@@ -1,7 +1,7 @@
 #!/bin/bash
 # Joins the phone's meeting ($S/meeting.txt) again and again with the camera on,
 # to catch the joins where the SDK rejects join() during the waiting-room
-# handover (PLAN §5.6) and see whether the phone still gets our picture.
+# handover and see whether the phone still gets our picture.
 # Usage: S=<dir> join-loop.sh <max joins> [prefix] [stop after this many reconnect joins]
 # Per join: one line with reconnect=yes|no, our audio/video state, and the
 # phone's picture colour at 30 s and 60 s (mean saturation x1000 of the middle

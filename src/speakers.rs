@@ -20,8 +20,8 @@ use tokio::sync::Mutex;
 use crate::settings::Settings;
 
 /// The `application.name` on WebKit's streams: libpulse takes it from the
-/// program name, which main.rs sets (WirePlumber keys its saved volumes on it,
-/// see PLAN.md §4.2).
+/// program name, which main.rs sets (WirePlumber keys its saved volumes on
+/// it).
 pub const APP_NAME: &str = "penguin-zoom";
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

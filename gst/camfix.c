@@ -10,11 +10,11 @@
  * (GStreamerVideoCapturer.cpp). This tracer does the same from outside: it is
  * loaded into WebKit's web process through GST_PLUGIN_PATH + GST_TRACERS
  * (src/main.rs) and sets the property on every videorate as it is created.
- * Harmless once WebKit sets it itself; delete it then (PLAN.md §5.9).
+ * Harmless once WebKit sets it itself; delete it then.
  *
  * 2. Half the frame rate. The pipeline behind a <video> that plays a camera
  * ends in WebKit's "webkit-gl-video-appsink". WebKit turns QoS on for it by
- * mistake (it means to skip camera players, PLAN.md §5.11). Camera buffers
+ * mistake (it means to skip camera players, WebKit bug 331962). Camera buffers
  * carry a decode timestamp later than their presentation timestamp by the
  * capture latency (about 53 ms); the sink's QoS events use the first, the
  * converters before it compare the second and skip the next frame, every

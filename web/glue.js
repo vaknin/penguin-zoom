@@ -8,7 +8,7 @@
 // in the DOM but are collapsed out of sight (see hideZoomChrome). Labels are
 // from SDK 6.10.0; re-check them when the SDK is upgraded.
 // WebKitGTK 2.54 has no Screen Orientation API, and the SDK's media code reads
-// `screen.orientation.type` when starting audio/video (PLAN.md §4.1). A desktop
+// `screen.orientation.type` when starting audio/video. A desktop
 // window is landscape, so expose a read-only stand-in.
 if (!('orientation' in screen) || !screen.orientation) {
   const orientation = Object.assign(new EventTarget(), {
@@ -21,7 +21,7 @@ if (!('orientation' in screen) || !screen.orientation) {
   Object.defineProperty(Screen.prototype, 'orientation', { configurable: true, get: () => orientation });
 }
 
-// WebKitGTK workaround (PLAN.md §4.2): a MediaStream <video> that isn't
+// WebKitGTK workaround: a MediaStream <video> that isn't
 // rendered inside the viewport never loads, so Zoom's camera and share capture
 // elements (parked at -10000,-10000 or display:none) stall and "Start video"
 // never finishes. Keep any such element inside the viewport but invisible.
@@ -399,8 +399,8 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
   };
 
   // Zoom warns "Can not use the hardware acceleration for video encoding due
-  // to the account restriction" in some joins; noted in the log only (PLAN.md
-  // §5.6: it is not why the camera failed, and nothing can be done from here).
+  // to the account restriction" in some joins; noted in the log only (it is
+  // not why the camera failed, and nothing can be done from here).
   {
     const warn = console.warn;
     console.warn = function (...a) {

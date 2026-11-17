@@ -504,7 +504,7 @@ function renderSettings() {
   const a = S.account;
   $('acctLine').textContent = a.signedIn ? `Signed in${a.user ? ' as ' + a.user : ''}` : 'Not signed in';
   $('acctHint').textContent = a.signedIn ? 'Joins as your Zoom account'
-    : a.configured ? 'Sign in to join as your Zoom account' : 'Sign-in needs the public client set up (PLAN.md, owner item 4)';
+    : a.configured ? 'Sign in to join as your Zoom account' : 'Sign-in is not available in this build';
   const btn = $('acctBtn');
   btn.hidden = !a.signedIn && !a.configured;
   btn.dataset.action = a.signedIn ? 'signout' : 'signin';

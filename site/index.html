@@ -61,8 +61,10 @@
     </ul>
 
     <h2>Install</h2>
-    <p>Install the Arch package, then start <code>penguin-zoom</code> from your app launcher or a terminal:</p>
-<pre><code>sudo pacman -U penguin-zoom-*.pkg.tar.zst
+    <p>Build it from source for your user (no prebuilt package yet), then start <code>penguin-zoom</code> from your app launcher or a terminal:</p>
+<pre><code>sudo pacman -S --needed base-devel git rust npm webkit2gtk-4.1 gtk3 gst-plugins-good gst-plugins-bad gst-libav gst-plugin-pipewire libpulse libsecret xdg-utils
+git clone https://github.com/vaknin/penguin-zoom ~/.local/src/penguin-zoom
+~/.local/src/penguin-zoom/scripts/install-user.sh
 penguin-zoom</code></pre>
     <p>Full steps, including sign-in, keyboard keys and how to remove the app, are in the <a href="docs.html">documentation</a>.</p>
 

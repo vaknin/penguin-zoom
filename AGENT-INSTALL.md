@@ -2,81 +2,72 @@
 
 You are installing Penguin for Zoom for a user on an Arch Linux machine. It is one program,
 `penguin-zoom`: a Rust app that shows Zoom's Meeting SDK for Web in a WebKitGTK window. It is
-built from this repo into an Arch package and installed with pacman. Follow these steps in
-order. Do not use sudo without asking the user first, and show them each sudo command before you
-run it. If a step fails, stop and explain why; don't retry in a loop or work around it. Only
-report something as working if you checked it.
+built from this repo and installed for the current user only, in their home folder, by
+`scripts/install-user.sh`. There is no prebuilt package. Follow these steps in order. Do not use
+sudo without asking the user first, and show them each sudo command before you run it. If a step
+fails, stop and explain why; don't retry in a loop or work around it. Only report something as
+working if you checked it.
 
-**Tell the user this before you start.** The app is not released yet. It is waiting for Zoom's
-app review, and its signing service is not running. Until both are done, the app installs and
-opens, but sign-in and joining a meeting only work for the developer's own Zoom account. Ask the
-user whether they still want it installed. Do not try to get around this: don't create Zoom
-credentials, and don't ask the user for a Zoom secret, key or password.
+**Tell the user this before you start.** The app is waiting for Zoom's app review. Until Zoom
+approves it, the app installs, opens and signs in, but joining a meeting only works for meetings
+of the developer's own Zoom account. Ask the user whether they still want it installed. Do not try
+to get around this: don't create Zoom credentials, and don't ask the user for a Zoom secret, key
+or password.
 
 ## 1. Look before you change anything
 
 ```sh
 . /etc/os-release && echo "$ID ${ID_LIKE:-}"
-command -v pacman makepkg
-pacman -Q penguin-zoom 2>/dev/null
+command -v pacman cargo npm git
+ls ~/.local/bin/penguin-zoom ~/.local/src/penguin-zoom 2>/dev/null
 ```
 
-- The package is for Arch and Arch-based distros (`ID` or `ID_LIKE` contains `arch`). On anything
-  else, stop and tell the user: there is no package for their distro yet.
-- If `pacman -Q` prints a version, the app is already installed. Go to **Updating**.
-- If `makepkg` is missing, `base-devel` isn't installed; step 2 installs it.
+- The steps are for Arch and Arch-based distros (`ID` or `ID_LIKE` contains `arch`). On anything
+  else, stop and tell the user: there are no install steps for their distro yet.
+- If `~/.local/bin/penguin-zoom` exists, the app is already installed. Go to **Updating**.
 
-## 2. Install the build tools (needs sudo)
+## 2. Install the build tools and libraries (needs sudo)
 
 ```sh
-sudo pacman -S --needed base-devel git
+sudo pacman -S --needed base-devel git rust npm webkit2gtk-4.1 gtk3 gst-plugins-good \
+  gst-plugins-bad gst-libav gst-plugin-pipewire libpulse libsecret xdg-utils
 ```
 
-Everything else is installed by `makepkg` in step 3, from Arch's own repos: the build tools
-`cargo` (the `rust` package, 1.85 or newer) and `npm`, and the runtime packages `webkit2gtk-4.1`,
-`gtk3`, `gst-plugins-good`, `gst-plugins-bad`, `gst-libav`, `gst-plugin-pipewire`, `libpulse`,
-`libsecret` and `xdg-utils`.
+`cargo` must be 1.85 or newer (`cargo --version`). If `cargo` or `npm` already come from a
+version manager (mise, rustup, nvm) and are new enough, leave `rust` and `npm` out of the command.
+
+The app keeps the user signed in through the Secret Service (for example GNOME Keyring). If no
+keyring runs on the machine, tell the user they will have to sign in after every start.
 
 Optional, ask the user: `xdg-desktop-portal-hyprland` (or the portal backend for their desktop)
 for screen sharing on Wayland, and `pipewire-pulse` for choosing speakers from the app.
 
-## 3. Build and install the package (needs sudo for the install)
+## 3. Build and install (no sudo)
 
 ```sh
 git clone https://github.com/vaknin/penguin-zoom ~/.local/src/penguin-zoom
-cd ~/.local/src/penguin-zoom/packaging
-makepkg -si
+~/.local/src/penguin-zoom/scripts/install-user.sh
 ```
 
-`makepkg -si` asks for the sudo password twice: once to install missing dependencies, once to
-install the finished package. Tell the user before you run it. The build takes a few minutes and
-runs the tests.
+The build takes a few minutes. It downloads Zoom's Meeting SDK from npm (`@zoom/meetingsdk`) into
+`assets/zoom-sdk/`; the SDK is not in the repo because Zoom's terms govern its redistribution, so
+the build needs a network connection.
 
-The build downloads Zoom's Meeting SDK from npm (`@zoom/meetingsdk`, the version in the
-PKGBUILD). It is not in the repo because Zoom's terms govern its redistribution, so the build
-needs a network connection.
+The script installs:
 
-If `cargo` or `npm` on this machine come from a version manager (mise, rustup, nvm) and not from
-pacman, `makepkg -s` will install the `rust` and `npm` packages next to them. To use the ones
-already on PATH, run `makepkg -di` instead (`-d` skips the dependency check), but only if the
-runtime packages listed in step 2 are already installed.
+- `~/.local/bin/penguin-zoom`, the program (`~/.local/bin` must be on `PATH`),
+- `~/.local/share/penguin-zoom`, its files and Zoom's SDK,
+- a launcher and icon under `~/.local/share`.
 
-## 4. Open Zoom links in Penguin (optional, changes a default: ask first)
+## 4. Zoom links
 
-The package registers the app for `zoommtg://` and `zoomus://` links. If another Zoom app is
-installed, links may still open there. Check the current handler and tell the user what it is:
+The script makes Penguin the handler for `zoommtg://` and `zoomus://` links, which replaces the
+previous handler. Before running step 3, note the current one so it can be restored when
+uninstalling, and tell the user:
 
 ```sh
 xdg-mime query default x-scheme-handler/zoommtg
 ```
-
-If the user wants Penguin to open Zoom links:
-
-```sh
-xdg-mime default penguin-zoom.desktop x-scheme-handler/zoommtg x-scheme-handler/zoomus
-```
-
-Note the previous handler (often `Zoom.desktop`) so it can be restored when uninstalling.
 
 ## 5. Desktop-wide keys on Hyprland (optional, edits the user's config: ask first)
 
@@ -99,26 +90,29 @@ The window class is `penguin-zoom`.
 ## 6. Check it works
 
 ```sh
-pacman -Q penguin-zoom
-ls /usr/share/penguin-zoom/assets/zoom-sdk/VERSION
+command -v penguin-zoom
+ls ~/.local/share/penguin-zoom/assets/zoom-sdk/VERSION
+git -C ~/.local/src/penguin-zoom describe --always
 penguin-zoom
 ```
 
-`pacman -Q` should print `penguin-zoom 0.1.0-1` or newer, and the `VERSION` file should exist
-(if it doesn't, the SDK download failed during the build: check the network and rebuild). The
-last command opens a window that says "Open a Zoom link to join". If no window opens, run it
-from a terminal and read the output; the app serves its interface on `127.0.0.1:53682`, so
-another program on that port stops it from starting (`ss -ltnp | grep 53682`).
+`command -v` should print `~/.local/bin/penguin-zoom` (expanded), and the `VERSION` file should
+exist (if it doesn't, the SDK download failed: check the network and run the script again). The
+last command opens a window that says "Open a Zoom link to join". If no window opens, run it from
+a terminal and read the output; the app serves its interface on `127.0.0.1:53682`, so another
+program on that port stops it from starting (`ss -ltnp | grep 53682`).
 
-You can't check a real meeting unless the user is the developer (see the note at the top). Say
-so plainly rather than reporting that joining works.
+You can't check a real meeting unless it belongs to the developer's account (see the note at the
+top). Say so plainly rather than reporting that joining works.
 
 ## 7. Tell the user how to use it
 
 Start **Penguin for Zoom** from the app launcher, or run `penguin-zoom`. Then:
 
-1. Sign in once per start: press `,` for Settings, then **Sign in** under Account. Zoom's own
-   sign-in page opens in the window. The sign-in is kept only while the app runs.
+1. Sign in once: press `,` for Settings, then **Sign in** under Account. Zoom's own sign-in page
+   opens in the default web browser. After **Allow**, the browser tab says you are signed in and
+   Settings shows "Signed in as" your name and email. The sign-in is kept in the system keyring,
+   so it lasts across restarts until you sign out.
 2. Click a Zoom meeting link, or copy one and press Ctrl V in the window. From a terminal:
    `penguin-zoom "https://zoom.us/j/123456789?pwd=…"`.
 3. Check the camera and microphone on the join screen and press **Join**.
@@ -129,22 +123,25 @@ speaker view, `d` devices, Ctrl Shift L leave. Closing the window also leaves.
 ## Updating
 
 ```sh
-cd ~/.local/src/penguin-zoom && git pull && cd packaging && makepkg -si
+git -C ~/.local/src/penguin-zoom pull
+~/.local/src/penguin-zoom/scripts/install-user.sh
 ```
+
+If the app is running, restart it to use the new version.
 
 ## Uninstalling
 
 Ask the user to sign out first (Settings, Account, **Sign out**), which revokes the app's token
-with Zoom. Then:
+with Zoom and deletes the saved sign-in from the keyring. Then:
 
 ```sh
-sudo pacman -R penguin-zoom
+~/.local/src/penguin-zoom/scripts/install-user.sh --remove
 rm -r ~/.config/penguin-zoom
 rm -rf ~/.local/src/penguin-zoom
 ```
 
-If you changed the link handler in step 4, set the previous one again, for example
+Set the previous link handler from step 4 again, for example
 `xdg-mime default Zoom.desktop x-scheme-handler/zoommtg x-scheme-handler/zoomus`. If you added
 Hyprland lines in step 5, remove them. The user can also remove the app from their Zoom account
-at https://marketplace.zoom.us/user/installed. Nothing else is left behind: the app keeps no
-data besides its settings file.
+at https://marketplace.zoom.us/user/installed. Nothing else is left behind: besides its settings
+file and the keyring item that Sign out deletes, the app keeps no data.

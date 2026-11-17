@@ -1,4 +1,4 @@
-//! Screen capture without WebKit's capturer (PLAN.md §4.2).
+//! Screen capture without WebKit's capturer.
 //!
 //! WebKitGTK 2.54's own `getDisplayMedia` takes DMA-BUF frames from PipeWire
 //! and imports them black (and sometimes crashes in the GL upload). So the

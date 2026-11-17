@@ -1,4 +1,4 @@
-// Screen share without WebKit's capturer (PLAN.md §4.2, src/screencast.rs).
+// Screen share without WebKit's capturer (see src/screencast.rs).
 //
 // WebKitGTK 2.54's own getDisplayMedia delivers black frames (DMA-BUF import)
 // and can crash the web process. This replaces it: the Rust side opens the

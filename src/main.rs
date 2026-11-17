@@ -1,5 +1,5 @@
 //! Penguin for Zoom: Zoom's Meeting SDK for Web inside WebKitGTK, served by a
-//! local axum server (server.rs). See PLAN.md.
+//! local axum server (server.rs). See README.md.
 //!
 //! Usage:
 //!   penguin-zoom [<zoom link or meeting number>]

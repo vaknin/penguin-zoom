@@ -36,7 +36,7 @@ prepare() {
 build() {
   cd "$_src"
   export CARGO_TARGET_DIR="$srcdir/target"
-  # The global cargo config points rustc-wrapper at a missing sccache (PLAN.md §3, owner item 3).
+  # Some cargo configs point rustc-wrapper at an sccache that isn't installed.
   RUSTC_WRAPPER= cargo build --release --locked
 }
 

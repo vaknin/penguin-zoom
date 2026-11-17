@@ -40,7 +40,7 @@
         <li><a href="#add">Add the app to your Zoom account (sign in)</a></li>
         <li><a href="#use">Use the app</a></li>
         <li><a href="#keys">Keyboard keys</a></li>
-        <li><a href="#keys">Desktop-wide keys</a></li>
+        <li><a href="#desktop-keys">Desktop-wide keys</a></li>
         <li><a href="#settings">Settings</a></li>
         <li><a href="#data">How your data is handled</a></li>
         <li><a href="#remove">Remove the app</a></li>
@@ -53,33 +53,41 @@
     <h2 id="prerequisites">1. Prerequisites</h2>
     <ul>
       <li>Arch Linux or an Arch-based distribution.</li>
-      <li>WebKitGTK 4.1, GTK 3 and GStreamer plugins (installed automatically as package dependencies).</li>
+      <li>WebKitGTK 4.1, GTK 3, GStreamer plugins and libsecret (installed in step 1 of <a href="#install">Install</a>).</li>
       <li>PipeWire (with its PulseAudio compatibility) or PulseAudio, for sound and speaker choice.</li>
       <li>For screen sharing on Wayland: <code>xdg-desktop-portal</code> with a backend for your desktop (for example <code>xdg-desktop-portal-hyprland</code>).</li>
       <li>A Zoom account (free or paid). The app joins meetings as you.</li>
+      <li>A keyring that provides the Secret Service (for example GNOME Keyring), to keep you signed in across restarts.</li>
     </ul>
 
     <h2 id="install">2. Install the app</h2>
+    <p>The app is built from source and installed for your user only, in your home folder. There is no prebuilt package yet.</p>
     <ol>
-      <li>Download the latest package (<code>penguin-zoom-*.pkg.tar.zst</code>) from the <a href="https://github.com/vaknin/penguin-zoom/releases">releases page</a>.</li>
-      <li>Install it:
-<pre><code>sudo pacman -U penguin-zoom-*.pkg.tar.zst</code></pre></li>
-      <li>Start <strong>Penguin for Zoom</strong> from your app launcher, or run <code>penguin-zoom</code> in a terminal. The window says "Open a Zoom link to join".</li>
-      <li>Optional: make Penguin open Zoom meeting links. The package registers it for <code>zoommtg://</code> and <code>zoomus://</code> links; if links still open another Zoom app, run:
-<pre><code>xdg-mime default penguin-zoom.desktop x-scheme-handler/zoommtg x-scheme-handler/zoomus</code></pre></li>
+      <li>Install the build tools and the libraries the app needs:
+<pre><code>sudo pacman -S --needed base-devel git rust npm webkit2gtk-4.1 gtk3 gst-plugins-good gst-plugins-bad gst-libav gst-plugin-pipewire libpulse libsecret xdg-utils</code></pre>
+      Rust 1.85 or newer is needed.</li>
+      <li>Get the source:
+<pre><code>git clone https://github.com/vaknin/penguin-zoom ~/.local/src/penguin-zoom</code></pre></li>
+      <li>Build and install it (no sudo; this takes a few minutes and downloads Zoom's Meeting SDK, so it needs a network connection):
+<pre><code>~/.local/src/penguin-zoom/scripts/install-user.sh</code></pre>
+      This puts the program in <code>~/.local/bin/penguin-zoom</code>, its files in <code>~/.local/share/penguin-zoom</code>, adds a launcher, and makes Penguin open <code>zoommtg://</code> and <code>zoomus://</code> links.</li>
+      <li>Start <strong>Penguin for Zoom</strong> from your app launcher, or run <code>penguin-zoom</code> in a terminal (<code>~/.local/bin</code> must be on your <code>PATH</code>). The window says "Open a Zoom link to join".</li>
     </ol>
+    <p>To update, pull the latest source and run the script again:</p>
+<pre><code>git -C ~/.local/src/penguin-zoom pull
+~/.local/src/penguin-zoom/scripts/install-user.sh</code></pre>
     <p>If something goes wrong, see <a href="#troubleshooting">Troubleshooting</a>.</p>
 
     <h2 id="add">3. Add the app to your Zoom account (sign in)</h2>
-    <p>Zoom requires apps like Penguin to join meetings as a signed-in Zoom user, so sign in once each time you start the app.</p>
+    <p>Zoom requires apps like Penguin to join meetings as a signed-in Zoom user. You sign in once; the app stays signed in after a restart.</p>
     <ol>
       <li>Open Settings: click the gear at the top right of the window, or press <kbd>,</kbd>.</li>
       <li>Under <strong>Account</strong>, choose <strong>Sign in</strong>.</li>
-      <li>Zoom's own sign-in page opens in the app window. Sign in with your Zoom account. We never see your password.</li>
+      <li>Zoom's own sign-in page opens in your default web browser. Sign in with your Zoom account. We never see your password.</li>
       <li>Zoom shows what the app asks for: a join token (ZAK) for your account and your basic profile. Choose <strong>Allow</strong>.</li>
-      <li>You return to the app, and Settings shows "Signed in".</li>
+      <li>The browser tab says you are signed in, and you can close it. Back in the app, Settings shows "Signed in as" your name and email.</li>
     </ol>
-    <p>The app keeps your sign-in only while it runs (nothing is saved to disk), so after you quit and restart it, sign in again. If sign-in fails, see <a href="#troubleshooting">Troubleshooting</a>.</p>
+    <p>The app keeps your sign-in in your system keyring (for example GNOME Keyring), so it lasts across restarts until you sign out. If sign-in fails, see <a href="#troubleshooting">Troubleshooting</a>.</p>
 
     <h2 id="use">4. Use the app</h2>
     <h3>Open a meeting</h3>
@@ -136,7 +144,7 @@
     </table>
     </div>
 
-    <h2 id="keys">6. Desktop-wide keys</h2>
+    <h2 id="desktop-keys">6. Desktop-wide keys</h2>
     <p>Mute or leave from anywhere on the desktop, even when Penguin is not focused. The app accepts these commands while it runs:</p>
 <pre><code>penguin-zoom --cmd mute-toggle
 penguin-zoom --cmd camera-toggle
@@ -158,7 +166,7 @@ penguin-zoom --cmd raise</code></pre>
     <ul>
       <li>Meeting audio, video, screen share and chat go directly between your computer and Zoom. Penguin does not record or store them.</li>
       <li>Your settings and display name are stored only on your computer.</li>
-      <li>Your Zoom sign-in tokens are kept only in the running app's memory and are never written to disk.</li>
+      <li>Your Zoom refresh token is stored in your system keyring (Secret Service, for example GNOME Keyring) so you stay signed in. The short-lived access token, the join token (ZAK) and your name and email are kept only in the running app's memory.</li>
       <li>To join, the app asks our signing service for a join signature, sending the meeting number and role (and, only when joining as host, your access token for a one-time check). The service stores none of it.</li>
       <li>No analytics, tracking, cookies or ads.</li>
     </ul>
@@ -170,10 +178,11 @@ penguin-zoom --cmd raise</code></pre>
       <li><strong>Sign out</strong>: Settings (<kbd>,</kbd>) → Account → <strong>Sign out</strong>. This revokes the app's access token with Zoom and deletes the saved sign-in from your keyring.</li>
       <li><strong>Remove the app from your Zoom account</strong>: sign in at <a href="https://marketplace.zoom.us/user/installed">marketplace.zoom.us/user/installed</a>, find <strong>Penguin for Zoom</strong>, and choose <strong>Remove</strong>. This cancels all access the app had to your account, even on other computers.</li>
       <li><strong>Uninstall the program</strong>:
-<pre><code>sudo pacman -R penguin-zoom</code></pre></li>
-      <li><strong>Delete your settings</strong> (optional; pacman leaves them in your home folder):
-<pre><code>rm -r ~/.config/penguin-zoom</code></pre></li>
-      <li>If you added Hyprland bindings or changed the link handler, remove those lines from your Hyprland config, and set your previous Zoom app as the handler again, for example <code>xdg-mime default Zoom.desktop x-scheme-handler/zoommtg x-scheme-handler/zoomus</code>.</li>
+<pre><code>~/.local/src/penguin-zoom/scripts/install-user.sh --remove</code></pre></li>
+      <li><strong>Delete your settings and the source</strong> (optional; the script leaves them in your home folder):
+<pre><code>rm -r ~/.config/penguin-zoom
+rm -rf ~/.local/src/penguin-zoom</code></pre></li>
+      <li>If you added desktop-wide key bindings, remove them. To send Zoom links to another Zoom app again, set it as the handler, for example <code>xdg-mime default Zoom.desktop x-scheme-handler/zoommtg x-scheme-handler/zoomus</code>.</li>
     </ol>
     <h3>What removal means</h3>
     <ul>
@@ -184,7 +193,7 @@ penguin-zoom --cmd raise</code></pre>
     <h3>Your data after removal</h3>
     <ul>
       <li>We hold no data about you, so there is nothing for us to delete. When you remove the app from your Zoom account, Zoom notifies our signing service, which stores nothing and has nothing to delete.</li>
-      <li>Tokens disappear when the app quits or you sign out.</li>
+      <li>Signing out deletes the saved sign-in from your keyring. Other tokens disappear when the app quits.</li>
       <li>Your settings file stays on your computer until you delete it (step 4).</li>
       <li>Data Zoom holds about your meetings is handled under Zoom's <a href="https://www.zoom.com/en/trust/privacy/privacy-statement/">Privacy Statement</a>.</li>
     </ul>
@@ -193,9 +202,9 @@ penguin-zoom --cmd raise</code></pre>
     <h2 id="troubleshooting">10. Troubleshooting</h2>
     <h3>Installing</h3>
     <ul>
-      <li><strong>pacman reports missing dependencies</strong>: update your system first (<code>sudo pacman -Syu</code>), then install again.</li>
+      <li><strong>The build fails</strong>: update your system (<code>sudo pacman -Syu</code>), check that the packages in step 1 of <a href="#install">Install</a> are installed and that <code>cargo --version</code> is 1.85 or newer, then run the script again.</li>
       <li><strong>The window opens blank</strong>: start <code>penguin-zoom</code> from a terminal and read the messages. Make sure WebKitGTK 4.1 (<code>webkit2gtk-4.1</code>) is installed and up to date.</li>
-      <li><strong>Clicking a meeting link opens another Zoom app</strong>: set Penguin as the handler (step 4 of <a href="#install">Install</a>).</li>
+      <li><strong>Clicking a meeting link opens another Zoom app</strong>: set Penguin as the handler with <code>xdg-mime default penguin-zoom.desktop x-scheme-handler/zoommtg x-scheme-handler/zoomus</code>.</li>
     </ul>
     <h3>Signing in</h3>
     <ul>

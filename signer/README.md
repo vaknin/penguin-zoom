@@ -251,7 +251,7 @@ Subscriptions. Then:
 
 Zoom requires the endpoint to be an FQDN with a valid CA certificate. An
 sslip.io name with a Let's Encrypt certificate meets that requirement, but
-move to your own domain before review (PLAN.md §6).
+move to your own domain before review.
 
 ## Updating
 

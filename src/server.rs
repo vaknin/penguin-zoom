@@ -716,8 +716,8 @@ async fn zak(State(s): State<AppState>) -> Response {
 
 /// Sign out: revoke the token at Zoom (Zoom's rule for removing an app) and
 /// forget it here either way. Public client, so client_id goes in the body.
-/// Whether Zoom accepts revoke from a public client is still unconfirmed
-/// (PLAN.md §6); `revoked: false` tells the page to point the user at the
+/// Whether Zoom accepts revoke from a public client is unconfirmed;
+/// `revoked: false` tells the page to point the user at the
 /// Marketplace's Added apps page instead.
 async fn signout(State(s): State<AppState>) -> Response {
     // Revoke needs a token Zoom still accepts, so refresh first if needed.

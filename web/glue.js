@@ -214,12 +214,70 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
       if (/accessing your meeting content/i.test(t.textContent)) t.classList.add('zc-aan-tip');
     }
   }
+
+  // Zoom's floating windows (Breakout Rooms, dialogs, menus) are portals on
+  // <body>, placed and sized by Zoom against the whole browser window (the
+  // room list's height is computed in JS from innerHeight), so they slide
+  // under our own fixed controls. Every such window is fitted into the space
+  // our controls leave free: moved left of a full-height panel, moved down
+  // past controls at the top, and scaled down if it would still reach the
+  // controls at the bottom. Measured with our adjustment undone each time,
+  // on the window's own box (Zoom's drag offset lives on an inner element,
+  // so a window the user dragged isn't pushed around).
+  const pageOwn = new Set(document.body.children); // index.html's own elements (glue.js runs at the end of <body>)
+  let chromeSel = '';
+  const GAP = 8;
+  function zoomWindows() {
+    const out = [];
+    for (const p of document.body.children) {
+      if (pageOwn.has(p) || p === root || p.contains(root) || p.closest('.zc-collapsed') || /^(SCRIPT|STYLE|VIDEO|CANVAS)$/.test(p.tagName)) continue;
+      const r = p.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      // A modal fills the viewport (backdrop); its window is the box inside.
+      const full = r.width >= innerWidth - 1 && r.height >= innerHeight - 1;
+      const w = full ? p.querySelector('[role=dialog], [class*="MuiPaper-root"]') : p;
+      if (w && !w.closest('.zc-collapsed')) out.push(w);
+    }
+    return out;
+  }
+  function keepWindowsClear() {
+    if (!chromeSel) return;
+    const chrome = [...document.querySelectorAll(chromeSel)].map((c) => c.getBoundingClientRect()).filter((c) => c.width && c.height);
+    for (const w of zoomWindows()) {
+      const inner = w.firstElementChild || w;
+      inner.style.removeProperty('zoom');
+      inner.style.removeProperty('margin-top');
+      inner.style.removeProperty('margin-left');
+      const r = w.getBoundingClientRect();
+      const across = (c, left, right) => c.left < right && c.right > left;
+      // Full-height controls (side panel) beside it: move left.
+      let dx = 0;
+      for (const c of chrome) {
+        if (c.height > innerHeight / 2 && across(c, r.left, r.right) && c.left > r.left) dx = Math.min(dx, Math.max(GAP - r.left, c.left - GAP - r.right));
+      }
+      const left = r.left + dx, right = r.right + dx;
+      let top = GAP, bottom = innerHeight - GAP;
+      for (const c of chrome) {
+        if (c.height > innerHeight / 2 || !across(c, left, right)) continue;
+        if (c.bottom <= innerHeight / 2) top = Math.max(top, c.bottom + GAP);
+        else bottom = Math.min(bottom, c.top - GAP);
+      }
+      const dy = Math.max(0, top - r.top);
+      const s = Math.max(0.5, Math.min(1, (bottom - r.top - dy) / r.height));
+      if (!dx && !dy && s === 1) continue;
+      // zoom scales the element's own margins too: divide them back out.
+      if (s < 1) inner.style.setProperty('zoom', String(s));
+      if (dy) inner.style.setProperty('margin-top', dy / s + 'px');
+      if (dx) inner.style.setProperty('margin-left', dx / s + 'px');
+    }
+  }
   let dialogPending = false;
   new MutationObserver(() => {
     if (dialogPending) return;
     dialogPending = true;
-    requestAnimationFrame(() => { dialogPending = false; hideZoomDialogs(); });
+    requestAnimationFrame(() => { dialogPending = false; hideZoomDialogs(); keepWindowsClear(); });
   }).observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('resize', () => requestAnimationFrame(keepWindowsClear));
 
   // ---- video area sizing: Zoom's view fills our root ----
   // Zoom draws its view `pad` px larger than asked on both sides, and never
@@ -254,6 +312,7 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
   function fit() {
     clearTimeout(fitTimer);
     fitTimer = setTimeout(fitNow, 120);
+    requestAnimationFrame(keepWindowsClear); // our panel opening/closing changes the free space too
   }
   async function fitNow() {
     if (!client || !root || !client.getCurrentMeetingInfo()?.isInMeeting) return;
@@ -636,9 +695,12 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
   }
 
   // ---- join / meeting ----
-  async function init(rootEl, onEvent) {
+  // `chrome`: selector for the page's own fixed controls that Zoom's floating
+  // windows must stay clear of (keepWindowsClear).
+  async function init(rootEl, onEvent, { chrome = '' } = {}) {
     root = rootEl;
     emit = onEvent;
+    chromeSel = chrome;
     client = ZoomMtgEmbedded.createClient();
     const first = fitSize(root.clientWidth || 1280, root.clientHeight || 700);
     await client.init({

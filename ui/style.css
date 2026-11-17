@@ -235,3 +235,5 @@ body.hide-aan .aan, body.hide-aan .zc-aan-tip { display: none; }
 .people .link.small { font-size: 12px; }
 .name-field { cursor: text; border: 1px solid transparent; transition: border-color .15s; }
 .name-field:focus-within { border-color: var(--accent); }
+/* Zoom's number fields (breakout room count) draw their own arrows; WebKit's spinner doubled them. */
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }

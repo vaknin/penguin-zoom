@@ -27,6 +27,7 @@ const ICONS = {
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v5M12 8h.01',
   rooms: 'M3 5h18v14H3zM12 5v14M3 12h9',
   apps: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
+  link: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71', // Lucide 'link' (ISC)
 };
 function setIcon(svg, name) {
   svg.setAttribute('viewBox', '0 0 24 24');
@@ -593,7 +594,13 @@ async function copyInvite(btn) {
   if (l.pwd) lines.push(`Passcode: ${l.pwd}`);
   try {
     await navigator.clipboard.writeText(lines.join('\n'));
-    if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy invite link'; }, 2000); }
+    const label = btn && (btn.querySelector('span') || btn);
+    if (label) {
+      const was = btn.id === 'btnInvite' ? 'Invite' : 'Copy invite link';
+      label.textContent = 'Copied';
+      clearTimeout(label._restore);
+      label._restore = setTimeout(() => { label.textContent = was; }, 2000);
+    }
   } catch { showError("Couldn't copy the invite"); }
 }
 function applyStyle() {
@@ -766,6 +773,7 @@ document.addEventListener('keydown', (e) => {
   if (S.screen !== 'meeting') return;
   if (k === 's' && e.shiftKey) { e.preventDefault(); act('share-change'); return; }
   if (k === 'b') { if (!$('btnRooms').hidden) act('breakout-manage'); return; }
+  if (k === 'i') { act('copy-invite', $('btnInvite')); return; }
   const map = { m: 'mute', v: 'video', s: 'share', c: 'chat', p: 'people', g: 'layout' };
   if (map[k]) { e.preventDefault(); act(map[k]); }
 });
@@ -810,7 +818,9 @@ async function start() {
   const l = q ? parseLink(q) : launch && launch.number ? { number: launch.number, pwd: launch.pwd || '', link: launch.link } : null;
   // Show the screen first; loading Zoom takes a second or more, and Join
   // waits for it (zcReady).
-  zcReady = zc.init($('zoomRoot'), onEvent).catch((e) => showError('Zoom failed to start: ' + (e.reason || e.message || e)));
+  // Our fixed controls over the meeting: Zoom's floating windows are kept clear of them.
+  zcReady = zc.init($('zoomRoot'), onEvent, { chrome: '#pill, #panel, .aan, .gear, .kb-status, .kb-keys' })
+    .catch((e) => showError('Zoom failed to start: ' + (e.reason || e.message || e)));
   if (l) openLink(l); else go('idle');
   await zcReady;
   // Live tests (scripts/phone/live-test.sh): ?autojoin&name=X joins at once;
@@ -876,6 +886,45 @@ async function start() {
         continue;
       }
       if (step === 'reclaim-host') { zc.reclaimHost(); continue; }
+      if (step === 'camlag') { // tests: how late the camera's frames reach the page (requestVideoFrameCallback timings)
+        const v = [...document.querySelectorAll('video')].find((x) => x.srcObject?.getVideoTracks?.()[0]?.readyState === 'live');
+        if (!v?.requestVideoFrameCallback) { tlog('camlag no live camera video or no rVFC'); continue; }
+        const rows = [];
+        await new Promise((done) => {
+          const t0 = performance.now();
+          const cb = (now, m) => {
+            rows.push({ now, ...m });
+            if (performance.now() - t0 < 3000) v.requestVideoFrameCallback(cb); else done();
+          };
+          v.requestVideoFrameCallback(cb);
+          setTimeout(done, 4000);
+        });
+        const med = (a) => { const s = a.filter((x) => Number.isFinite(x)).sort((p, q) => p - q); return s.length ? s[s.length >> 1].toFixed(1) : '-'; };
+        const r0 = rows[0] || {};
+        tlog(`camlag frames=${rows.length} keys=${Object.keys(r0).join('/')} track=${JSON.stringify(v.srcObject.getVideoTracks()[0].getSettings())}`
+          + ` now-capture=${med(rows.map((r) => r.now - r.captureTime))} now-receive=${med(rows.map((r) => r.now - r.receiveTime))}`
+          + ` expected-capture=${med(rows.map((r) => r.expectedDisplayTime - r.captureTime))} presented-capture=${med(rows.map((r) => r.presentationTime - r.captureTime))}`
+          + ` sample=${JSON.stringify(rows[rows.length >> 1] || {}).slice(0, 400)}`);
+        continue;
+      }
+      if (step === 'zwin') { // tests: Zoom's floating windows: where they sit and how they're positioned
+        const ours = '#panel, #pill, #toast, .kb-keys, #devices, #settings, #join, #idle, .aan, .gear';
+        const wins = [...document.querySelectorAll('body *')].filter((x) => {
+          if (x.offsetParent === null || x.closest(ours) || x.closest('.zc-collapsed')) return false;
+          const cs = getComputedStyle(x), r = x.getBoundingClientRect();
+          return (cs.position === 'fixed' || cs.position === 'absolute') && r.width > 250 && r.height > 150 && x.id !== 'zoomRoot';
+        });
+        const top = wins.filter((x) => !wins.some((o) => o !== x && o.contains(x)));
+        const box = (x) => { const cs = getComputedStyle(x), r = x.getBoundingClientRect();
+          return `${x.tagName.toLowerCase()}.${String(x.className).slice(0, 60)} rect=${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)} `
+            + `pos=${cs.position} z=${cs.zIndex} h=${cs.height} maxh=${cs.maxHeight} ovf=${cs.overflowY} disp=${cs.display} flex=${cs.flex} style=${x.getAttribute('style')?.slice(0, 120)}`; };
+        // Each window, then the boxes inside it that set a height (min/max/inline): what sizes it.
+        const sizers = (x) => [...x.querySelectorAll('*')].filter((c) => { const cs = getComputedStyle(c);
+          return cs.minHeight !== '0px' && cs.minHeight !== 'auto' || cs.maxHeight !== 'none' || /height/.test(c.getAttribute('style') || ''); })
+          .slice(0, 12).map((c) => { const cs = getComputedStyle(c); return `${box(c)} minh=${cs.minHeight}`; });
+        tlog('zwin ' + innerWidth + 'x' + innerHeight + ' ' + top.filter((x) => !x.closest('#zoomRoot')).map((x) => [box(x), ...sizers(x)].join(' | ')).join(' || '));
+        continue;
+      }
       if (step === 'aan') { // tests: Zoom's "apps accessing content" tip and our icon, and whether they show
         const tips = [...document.querySelectorAll('[role=tooltip]')].filter((x) => /accessing your meeting content/i.test(x.textContent));
         tlog(`aan setting=${!!S.settings.hideAppsNotice} tips=${tips.map((x) => `${x.className.includes('zc-aan-tip') ? 'tagged' : 'untagged'}:${getComputedStyle(x).display}`).join(',') || 'none'}`
@@ -917,7 +966,12 @@ async function start() {
         continue;
       }
       if (step.startsWith('say:')) { $('chatInput').value = step.slice(4); $('chatForm').requestSubmit(); }
-      else act(step, document.querySelector(`[data-action="${step}"]`));
+      else { // the visible control when an action has several (copy-invite: pill and People panel)
+        const els = [...document.querySelectorAll(`[data-action="${step}"]`)];
+        const el = els.find((e) => e.getClientRects().length) || els[0] || null;
+        act(step, el);
+        if (el) setTimeout(() => tlog(`${step} -> ${el.textContent.trim()}`), 500); // the control's feedback (e.g. "Copied")
+      }
     }
   }
   // ?probe=name (tests): what is on top of the join screen's name field.

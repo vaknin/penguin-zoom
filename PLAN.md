@@ -567,6 +567,17 @@ The owner asked whether to submit. Answer: not yet. Decisions from the owner: **
 6. Test plan for the reviewers (written, no video).
 7. The public repo `vaknin/penguin-zoom` carries `PLAN.md` (at `ef4e831`, including §8's notes on review risk). Reviewers can find it from the site's links. Owner's call whether that file stays public.
 
+### 5.14 Marketplace filled in (2026-11-17, evening)
+
+Done by Claude in a headless Brave on the saved profile (owner signed in to Zoom there once), every field checked after a reload. Texts in `docs/marketplace-answers.md`, images in `docs/listing/` and `docs/architecture.png`.
+- Scope description (dev and prod); Production public-client justification; Technical Design (stack, architecture diagram, SSDLC/SAST/pentest "No", TLS 1.2+ "Yes", x-zm-signature "Yes", stores Zoom data "Yes" with the at-rest text); App listing (penguin icon light+dark, short and long description, cover, 4 gallery images, "From your site" with landing `https://penguin.kitah.co.il/`, not on other marketplaces, categories Collaboration + Productivity, industry Other); Link & support (owner's links, correct); EU: **"Available in the EU" switched off** (Zoom then needs no trader, bank or ID details; EU users can't add the app; reversible); Unlisted. Publish page says **"Ready for submission"**. Not touched: reviewer notes, test device, developer agreement, Submit.
+- **Production has its own credentials** (client ID `cUyRB6qBS36fuXMveshsQ`, public client `A5tAVufnR9KL896jTgthpA`). Until approval the app signs in with the Development public client (`I7gQRtV3QNK0b48jBgUE0Q`) and the signer signs with the Development SDK key. At approval: switch `PUBLIC_CLIENT_ID` in `src/server.rs` and put the Production key and secret in `/etc/penguin-signer.env`.
+- Both client secrets appeared in a page dump during the audit (tool output only). Regenerate both when convenient; the Development one is in the keyring and on the VM.
+- Company name on the listing is "Iris" (owner's entry); Terms and Privacy name "Aviv Vaknin". Reviewers may ask about the mismatch.
+- Gallery and README images: cameras off; the phone participant's Zoom profile picture was painted over with the plain name tile. Raw shots with real video or the picture were deleted.
+- Live check in the same session (meeting 71891643226): join signed by the hosted signer (`[sig] remote signature`), `fit()` scaled Zoom's view (0.79) so it no longer runs under the control bar; seen with a share. Bug seen: the devices menu ticks two cameras when two entries share one label.
+- Zoom's phone app changed: "Meet" opens a sheet whose title and button both read "Start a meeting"; `zp start` taps `btnStartMeeting` by id. `droid.py` picks one adb device when the phone is listed twice.
+
 ## 6. Later (only if the owner keeps using it)
 
 - **App Review** so the app can join meetings outside the owner's account: production credentials, test plan, least-privilege scopes, uninstall handling, privacy policy and support URL; reviewers may ask for a demo video, and may ask why the app needs a public client ID. Passing review doesn't force a public listing; the app can stay unlisted.

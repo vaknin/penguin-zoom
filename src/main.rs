@@ -373,15 +373,27 @@ fn decide(req: &webkit2gtk::PermissionRequest, allow: bool, what: &str, uri: &st
 }
 
 /// Where `ui/`, `web/` and `assets/zoom-sdk/` live: `$PENGUIN_ZOOM_DATA`,
-/// else the installed copy (`/usr/share/penguin-zoom`, from the PKGBUILD),
-/// else the source tree this binary was built from (development).
+/// else `<prefix>/share/penguin-zoom` next to the binary's `<prefix>/bin`
+/// (`~/.local` for `scripts/install-user.sh`, `/usr` for the PKGBUILD), else
+/// `/usr/share/penguin-zoom`, else the source tree this binary was built from
+/// (development).
 fn data_root() -> std::path::PathBuf {
     if let Some(d) = std::env::var_os("PENGUIN_ZOOM_DATA") {
         return d.into();
     }
-    let installed = std::path::PathBuf::from("/usr/share/penguin-zoom");
+    let ok = |p: &std::path::Path| p.join("assets/zoom-sdk/VERSION").exists();
     let dev = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let exe = std::env::current_exe().ok();
     // A development build run from its own tree prefers that tree.
-    let exe_in_tree = std::env::current_exe().map(|e| e.starts_with(&dev)).unwrap_or(false);
-    if !exe_in_tree && installed.join("assets/zoom-sdk/VERSION").exists() { installed } else { dev }
+    if exe.as_ref().is_some_and(|e| e.starts_with(&dev)) {
+        return dev;
+    }
+    if let Some(prefix) = exe.as_ref().and_then(|e| e.parent()).and_then(|b| b.parent()) {
+        let beside = prefix.join("share/penguin-zoom");
+        if ok(&beside) {
+            return beside;
+        }
+    }
+    let installed = std::path::PathBuf::from("/usr/share/penguin-zoom");
+    if ok(&installed) { installed } else { dev }
 }

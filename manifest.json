@@ -21,6 +21,10 @@
       {
         "scope": "user:read:user",
         "optional": false
+      },
+      {
+        "scope": "meeting:write:meeting",
+        "optional": false
       }
     ]
   },

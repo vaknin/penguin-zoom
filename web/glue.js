@@ -197,6 +197,25 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     if (info) collapse(info, [/^view$|thumbnail-/i]);
   }
 
+  // Zoom's own "Join Breakout Room" dialog duplicates our invite toast (and
+  // dims the meeting): collapse it with its backdrop, the outermost wrapper
+  // that holds no video.
+  function hideZoomDialogs() {
+    for (const d of document.querySelectorAll('[role=dialog]')) {
+      if (d.closest('.zc-collapsed') || !/^\s*join breakout room/i.test(d.textContent)) continue;
+      let el = d;
+      while (el.parentElement && el.parentElement !== root && el.parentElement !== document.body
+        && !el.parentElement.querySelector('video, canvas')) el = el.parentElement;
+      el.classList.add('zc-collapsed');
+    }
+  }
+  let dialogPending = false;
+  new MutationObserver(() => {
+    if (dialogPending) return;
+    dialogPending = true;
+    requestAnimationFrame(() => { dialogPending = false; hideZoomDialogs(); });
+  }).observe(document.body, { childList: true, subtree: true });
+
   // ---- video area sizing: Zoom's view fills our root ----
   // Zoom adds room for its own header and toolbar to the size we ask for, and
   // ignores viewSizes while showing a share (live test 2026-11-17: #zoomRoot
@@ -250,6 +269,16 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
 
   // ---- state snapshots for the UI ----
   let speakerId = null;
+  // getAttendeeslist() leaves out the waiting room, and the SDK keeps its own
+  // on-hold list internal: track held users from the user events instead.
+  const held = new Map();
+  function trackHeld(ev, p) {
+    for (const u of Array.isArray(p) ? p : p ? [p] : []) {
+      if (!u || u.userId == null) continue;
+      if (ev !== 'user-removed' && u.bHold) held.set(u.userId, u.displayName || u.userName || held.get(u.userId) || '');
+      else if (ev === 'user-removed' || u.bHold === false) held.delete(u.userId);
+    }
+  }
   let lastState = '';
   function snapshot() {
     if (!client) return;
@@ -270,7 +299,10 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
           video: !!(u.video ?? u.bVideoOn), host: !!u.isHost, me: !!(me && u.userId === me.userId),
           speaking: u.userId === speakerId, sharing: !!u.sharerOn, cohost: !!u.isCoHost,
           waiting: !!(u.isHold || u.bHold), hand: !!u.bRaiseHand,
-        })),
+        })).concat([...held].filter(([id]) => !users.some((u) => u.userId === id)).map(([id, name]) => ({
+          id, name, muted: true, audio: false, video: false, host: false, me: false,
+          speaking: false, sharing: false, cohost: false, waiting: true, hand: false,
+        }))),
       };
       const j = JSON.stringify(s);
       if (j !== lastState) { lastState = j; emit(j); }
@@ -603,7 +635,7 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     });
     client.on('connection-change', (p) => {
       send({ type: 'connection', state: p && p.state });
-      if (p && p.state === 'Closed') { stopJoinTimers(); seenChat.clear(); send({ type: 'left' }); }
+      if (p && p.state === 'Closed') { stopJoinTimers(); seenChat.clear(); held.clear(); send({ type: 'left' }); }
       snapshot();
     });
     // Re-fit when our area changes (window, chat panel) and when a share
@@ -612,7 +644,7 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     client.on('peer-share-state-change', () => { fit(); setTimeout(fit, 1500); });
     client.on('active-speaker', (p) => { speakerId = Array.isArray(p) && p[0] ? p[0].userId : null; snapshot(); });
     for (const ev of ['user-added', 'user-removed', 'user-updated', 'peer-share-state-change']) {
-      client.on(ev, () => snapshot());
+      client.on(ev, (p) => { if (ev !== 'peer-share-state-change') trackHeld(ev, p); snapshot(); });
     }
     client.on('chat-on-message', (m) => emitChat(m));
     window.__zcShare.onchange = () => snapshot();

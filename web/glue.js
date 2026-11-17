@@ -217,23 +217,35 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
   }).observe(document.body, { childList: true, subtree: true });
 
   // ---- video area sizing: Zoom's view fills our root ----
-  // Zoom adds room for its own header and toolbar to the size we ask for, and
-  // ignores viewSizes while showing a share (live test 2026-11-17: #zoomRoot
-  // 1268x573, Zoom's container 1272x728, running under our control bar). So
-  // ask, measure what Zoom drew, ask again minus the overflow, and if it still
-  // doesn't fit, scale Zoom's view down to fit (centred).
+  // Zoom draws its view `pad` px larger than asked on both sides, and never
+  // shorter than `ratio` x its width (live test 2026-11-17: asked 1264x450
+  // and 1264x218, got 1268x726 both times; asked 1053x610, got 1057x614). It
+  // ignores viewSizes while showing a share. So ask for the size that fits,
+  // narrower when the height would overflow, and centre it; correct once if
+  // the learned shape was off, and scale down whatever still doesn't fit (a
+  // share). The old placement stays until the new one is known and an
+  // unchanged size isn't asked again, so a re-fit doesn't flash.
   let fitTimer = 0;
   let fitSeq = 0;
+  let lastAsk = '';
+  // Seeded with the live-test values so even the first fit needs one ask.
+  let pad = 4;
+  let ratio = 0.5726;
   function zoomBox() {
     // The largest laid-out box inside our root: Zoom's outer container.
+    // Layout sizes (offsetWidth), so our own transform doesn't count.
     let best = null, area = 0;
     for (const el of root.querySelectorAll('div')) {
       if (el.closest('.zc-collapsed')) continue;
-      const r = el.getBoundingClientRect();
-      if (r.width * r.height > area) { area = r.width * r.height; best = r; }
+      const a = el.offsetWidth * el.offsetHeight;
+      if (a > area) { area = a; best = { width: el.offsetWidth, height: el.offsetHeight }; }
     }
     return best;
   }
+  const fitSize = (W, H) => ({
+    w: Math.max(160, Math.min(W, Math.floor(H / ratio)) - pad),
+    h: Math.max(120, H - pad),
+  });
   function fit() {
     clearTimeout(fitTimer);
     fitTimer = setTimeout(fitNow, 120);
@@ -242,29 +254,35 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     if (!client || !root || !client.getCurrentMeetingInfo()?.isInMeeting) return;
     const seq = ++fitSeq;
     const inner = root.firstElementChild;
-    if (inner) inner.style.transform = '';
-    const r = root.getBoundingClientRect();
-    let w = Math.round(r.width), h = Math.round(r.height);
-    for (let pass = 0; pass < 3; pass++) {
-      try { await client.updateVideoOptions({ viewSizes: { default: { width: w, height: h }, ribbon: { width: w, height: h } } }); }
-      catch (e) { log('warn', 'glue: updateVideoOptions ' + (e?.message || e?.reason || e)); break; }
-      await sleep(250);
-      if (seq !== fitSeq) return;
-      const z = zoomBox();
+    const W = root.clientWidth, H = root.clientHeight;
+    let ask = fitSize(W, H);
+    let z = null;
+    for (let pass = 0; pass < 2; pass++) {
+      const { w, h } = ask;
+      if (lastAsk !== `${w}x${h}`) {
+        try { await client.updateVideoOptions({ viewSizes: { default: { width: w, height: h }, ribbon: { width: w, height: h } } }); }
+        catch (e) { log('warn', 'glue: updateVideoOptions ' + (e?.message || e?.reason || e)); break; }
+        lastAsk = `${w}x${h}`;
+        await sleep(250);
+        if (seq !== fitSeq) return;
+      }
+      z = zoomBox();
       if (!z) return;
-      const dw = Math.round(z.width - r.width), dh = Math.round(z.height - r.height);
-      if (dw <= 2 && dh <= 2) return;
-      if (pass === 2) break;
-      w = Math.max(160, w - Math.max(0, dw));
-      h = Math.max(120, h - Math.max(0, dh));
+      // Far from what we asked: a share view, whose size says nothing.
+      if (Math.abs(z.width - w) > 40) break;
+      pad = Math.max(0, z.width - w);
+      // Taller than asked: the width sets the height, which shows the shape.
+      if (z.height > h + pad + 2) ratio = z.height / z.width;
+      const next = fitSize(W, H);
+      if (Math.abs(next.w - w) <= 2 && Math.abs(next.h - h) <= 2) break;
+      ask = next;
     }
-    const z = zoomBox();
     if (!inner || !z || seq !== fitSeq) return;
-    const k = Math.min(r.width / z.width, r.height / z.height, 1);
-    if (k >= 0.995) return;
+    const k = Math.min(W / z.width, H / z.height, 1);
+    const x = Math.round((W - z.width * k) / 2);
     inner.style.transformOrigin = '0 0';
-    inner.style.transform = `translate(${Math.round((r.width - z.width * k) / 2)}px, 0) scale(${k.toFixed(4)})`;
-    log('info', `glue: fit scaled Zoom's view ${Math.round(z.width)}x${Math.round(z.height)} by ${k.toFixed(3)} into ${Math.round(r.width)}x${Math.round(r.height)}`);
+    inner.style.transform = k >= 0.995 ? (x > 1 ? `translateX(${x}px)` : '') : `translate(${x}px, 0) scale(${k.toFixed(4)})`;
+    if (k < 0.995) log('info', `glue: fit scaled Zoom's view ${z.width}x${z.height} by ${k.toFixed(3)} into ${W}x${H}`);
   }
 
   // ---- state snapshots for the UI ----
@@ -617,6 +635,7 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     root = rootEl;
     emit = onEvent;
     client = ZoomMtgEmbedded.createClient();
+    const first = fitSize(root.clientWidth || 1280, root.clientHeight || 700);
     await client.init({
       zoomAppRoot: root,
       language: 'en-US',
@@ -627,7 +646,7 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
         video: {
           isResizable: false,
           popper: { disableDraggable: true },
-          viewSizes: { default: { width: root.clientWidth || 1280, height: root.clientHeight || 700 } },
+          viewSizes: { default: { width: first.w, height: first.h } },
           defaultViewType: 'gallery',
         },
         sharing: { options: { hideShareAudioOption: true } },

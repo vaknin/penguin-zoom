@@ -439,10 +439,14 @@ function renderDevices() {
   // first in the list. Every device is listed; nothing is filtered out.
   const cur = (list, id, label) => (id && list.some((d) => d.id === id) ? id : null)
     || (label && (list.find((d) => d.name === label) || {}).id) || (list[0] || {}).id;
-  const cam = cur(S.dev.cams, S.dev.cam || window.__zcDev.cameraId, window.__zcDev.camera);
-  const mic = cur(S.dev.mics, S.dev.mic || window.__zcDev.micId, window.__zcDev.mic);
-  $('devCams').replaceChildren(...(S.dev.cams.length ? S.dev.cams.map((d) => devRow(d.name, d.id === cam, () => pickCam(d))) : empty('No camera found')));
-  $('devMics').replaceChildren(...(S.dev.mics.length ? S.dev.mics.map((d) => devRow(d.name, d.id === mic, () => pickMic(d))) : empty('No microphone found')));
+  // Zoom's list can hold the same device twice (same id): show it once, so
+  // only one row is ever ticked (live test 2026-11-17: two webcam rows ticked).
+  const once = (list) => list.filter((d, i) => !d.id || list.findIndex((e) => e.id === d.id) === i);
+  const cams = once(S.dev.cams), mics = once(S.dev.mics);
+  const cam = cur(cams, S.dev.cam || window.__zcDev.cameraId, window.__zcDev.camera);
+  const mic = cur(mics, S.dev.mic || window.__zcDev.micId, window.__zcDev.mic);
+  $('devCams').replaceChildren(...(cams.length ? cams.map((d) => devRow(d.name, d.id === cam, () => pickCam(d))) : empty('No camera found')));
+  $('devMics').replaceChildren(...(mics.length ? mics.map((d) => devRow(d.name, d.id === mic, () => pickMic(d))) : empty('No microphone found')));
   $('devSpk').replaceChildren(...(S.dev.spk.length ? S.dev.spk.map((d) => devRow(d.name, d.current, () => pickSpk(d))) : empty('No speakers found')));
 }
 function remember(kind, d) {

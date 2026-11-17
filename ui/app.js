@@ -772,7 +772,14 @@ async function start() {
   S.joinMic = !S.settings.joinMuted;
   S.joinCam = !S.settings.joinCameraOff;
   applyStyle();
-  await refreshAccount();
+  // The quick answer shows "New meeting" at once; the full one refreshes the
+  // token with Zoom (about a second) and corrects it if Zoom said no.
+  try {
+    const st = await api('/api/status/quick');
+    S.account = { signedIn: !!st.signedIn, user: st.user || null, configured: !!st.publicClientConfigured };
+    renderSettings();
+  } catch {}
+  refreshAccount();
   let launch = null;
   try { launch = await api('/api/launch'); } catch {}
   const q = new URLSearchParams(location.search).get('m');

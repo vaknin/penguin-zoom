@@ -131,6 +131,7 @@ pub async fn run(root: PathBuf, listener: std::net::TcpListener, launch: Option<
         .route("/api/zak", get(zak))
         .route("/api/new-meeting", post(new_meeting))
         .route("/api/status", get(status))
+        .route("/api/status/quick", get(status_quick))
         .route("/api/signout", post(signout))
         .route("/api/log", post(log))
         .route("/api/launch", get(launch_info))
@@ -796,6 +797,23 @@ async fn signout(State(s): State<AppState>) -> Response {
         }
     };
     Json(json!({ "revoked": revoked })).into_response()
+}
+
+/// Sign-in state without asking Zoom (no token refresh, no name lookup), so
+/// the window can show "New meeting" at once; `/api/status` confirms it.
+async fn status_quick(State(s): State<AppState>) -> Response {
+    let mut sess = s.session.lock().await;
+    if sess.refresh_token.is_none() && !sess.keyring_checked {
+        sess.keyring_checked = true;
+        sess.refresh_token = keyring_load_refresh(s.keyring).await;
+    }
+    let signed_in = sess.refresh_token.is_some() || (sess.access_token.is_some() && now() < sess.access_expires - 60);
+    Json(json!({
+        "signedIn": signed_in,
+        "user": sess.user_label,
+        "publicClientConfigured": public_client_id().is_some(),
+    }))
+    .into_response()
 }
 
 async fn status(State(s): State<AppState>) -> Response {

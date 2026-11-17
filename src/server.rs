@@ -269,9 +269,9 @@ struct SigReq {
 
 /// The hosted signing service (signer/). Zoom's terms keep the SDK secret off
 /// users' machines, so release builds sign there. `PENGUIN_SIGNER_URL` overrides
-/// the built-in URL; with neither, the app signs locally with the developer's
-/// keyring secret (development only).
-const DEFAULT_SIGNER_URL: &str = "";
+/// the built-in URL; set it empty (`PENGUIN_SIGNER_URL=`) to sign locally with
+/// the developer's keyring secret (development only).
+const DEFAULT_SIGNER_URL: &str = "https://penguin.kitah.co.il";
 
 fn signer_url() -> Option<String> {
     let u = std::env::var("PENGUIN_SIGNER_URL").unwrap_or_else(|_| DEFAULT_SIGNER_URL.to_string());

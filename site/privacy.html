@@ -72,7 +72,7 @@
         <tr><td>Settings: join muted, join with camera off, interface style, hide controls when idle, follow desktop theme, chosen speaker, and the display name you last joined with</td><td>Your computer only, in <code>~/.config/penguin-zoom/settings.json</code></td><td>Nobody. (The display name is sent to Zoom when you join; see next row.)</td><td>Until you change or delete the file</td></tr>
         <tr><td>Display name you type on the join screen</td><td>Your settings file</td><td>Zoom, when you join, so other participants see it</td><td>On your computer: until you change it. At Zoom: per Zoom's policy</td></tr>
         <tr><td>Meeting number and passcode (from the link you open)</td><td>App memory while it runs</td><td>Zoom (both, to join). Our signing service (meeting number only, see <a href="#signer">section 5</a>)</td><td>Gone when the app quits. Not stored by our signing service</td></tr>
-        <tr><td>Zoom sign-in tokens (OAuth access token and refresh token)</td><td>App memory only; never written to disk</td><td>Zoom's API. For joining as host only, the access token is sent to our signing service for a one-time check</td><td>Until you sign out or quit the app</td></tr>
+        <tr><td>Zoom sign-in tokens (OAuth access token and refresh token)</td><td>Access token: app memory only. Refresh token: your system keyring (for example GNOME Keyring), so you stay signed in after a restart; never in a plain file</td><td>Zoom's API. For joining as host only, the access token is sent to our signing service for a one-time check</td><td>Access token until you quit; refresh token until you sign out, Zoom rejects it, or it expires (Zoom: 90 days)</td></tr>
         <tr><td>Your name from your Zoom profile</td><td>App memory only</td><td>Nobody; shown to you in Settings</td><td>Until you sign out or quit the app</td></tr>
         <tr><td>ZAK (Zoom's short-lived join token for your account)</td><td>App memory, for the few seconds of joining</td><td>Zoom (it goes back to Zoom to join the meeting as you)</td><td>Discarded after the join; it expires within minutes</td></tr>
         <tr><td>Meeting audio, video, screen share, chat messages, participant list</td><td>Not stored by the app</td><td>Directly between your computer and Zoom. We never receive them</td><td>Not kept by us. At Zoom: per Zoom's policy</td></tr>
@@ -118,8 +118,8 @@
     <h2 id="sharing">7. Who we share data with</h2>
     <ul>
       <li><strong>Zoom Communications, Inc.</strong>: everything needed for the meeting goes to Zoom, as described above. See Zoom's <a href="https://www.zoom.com/en/trust/privacy/privacy-statement/">Privacy Statement</a>.</li>
-      <li><strong>Oracle (Oracle Cloud Infrastructure)</strong>: hosts our signing service. Network traffic passes through Oracle's infrastructure; Oracle acts as our hosting provider. See <a href="https://www.oracle.com/legal/privacy/">Oracle's privacy policies</a>.</li>
-      <li><strong>GitHub, Inc.</strong>: hosts this website (GitHub Pages), the source code, the package downloads and the issue tracker. GitHub may log visitors' IP addresses for security. See the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>.</li>
+      <li><strong>Oracle (Oracle Cloud Infrastructure)</strong>: hosts our signing service and this website. Network traffic passes through Oracle's infrastructure; Oracle acts as our hosting provider. See <a href="https://www.oracle.com/legal/privacy/">Oracle's privacy policies</a>.</li>
+      <li><strong>GitHub, Inc.</strong>: hosts the source code, the package downloads and the issue tracker. GitHub may log visitors' IP addresses for security. See the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>.</li>
       <li><strong>Our email provider</strong>, if you email us.</li>
       <li><strong>Authorities</strong>, only if the law requires it.</li>
     </ul>
@@ -127,7 +127,7 @@
 
     <h2 id="retention">8. How long data is kept</h2>
     <ul>
-      <li>On your computer: settings until you change or delete them; tokens and your profile name until you sign out or quit.</li>
+      <li>On your computer: settings until you change or delete them; the sign-in (refresh) token in your keyring until you sign out; other tokens and your profile name until you quit.</li>
       <li>On our signing service: nothing after the request finishes, except the 5-minute in-memory token hash for host joins. A restart clears all memory.</li>
       <li>Support: GitHub issues stay public until closed or deleted; emails are deleted once no longer needed, or on request.</li>
     </ul>
@@ -136,7 +136,7 @@
     <p>When you sign out, remove the app from your Zoom account, or uninstall it, we hold no data about you to delete: our signing service never stored any. Your settings file stays on your computer until you delete it. How to do each of these is in the <a href="docs.html#remove">documentation</a>. Data that Zoom keeps about your meetings is handled by Zoom.</p>
 
     <h2 id="security">10. Security</h2>
-    <p>All traffic to Zoom and to our signing service uses HTTPS. Sign-in uses OAuth with PKCE, so no app secret ships with the app. The app's local server only accepts requests from its own window. Tokens are kept in memory only and are masked in diagnostic output. No method is perfectly secure; please report security problems privately to dibs.apps@gmail.com rather than in a public issue.</p>
+    <p>All traffic to Zoom and to our signing service uses HTTPS. Sign-in uses OAuth with PKCE, so no app secret ships with the app. The app's local server only accepts requests from its own window. The sign-in token that keeps you signed in is stored in your system keyring (for example GNOME Keyring), never in a plain file; other tokens are kept in memory only, and all tokens are masked in diagnostic output. No method is perfectly secure; please report security problems privately to dibs.apps@gmail.com rather than in a public issue.</p>
 
     <h2 id="rights">11. Your rights and how to use them</h2>
     <p>Depending on where you live (for example under the EU/UK GDPR, the Israeli Privacy Protection Law, or the CCPA/CPRA in California), you may have the right to:</p>

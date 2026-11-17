@@ -3,11 +3,15 @@
 # first install and for every update.
 #
 #   signer/deploy/deploy.sh ubuntu@203.0.113.7
-#   SIGNER_HOST=signer.example.org signer/deploy/deploy.sh ubuntu@203.0.113.7
+#   PENGUIN_HOSTS="penguin.example.org, 203-0-113-7.sslip.io" signer/deploy/deploy.sh ubuntu@203.0.113.7
 #
-# SIGNER_HOST is the public name Caddy serves and gets a certificate for.
-# Default for an IPv4 target: <ip-with-dashes>.sslip.io. Secrets are never
-# handled here; put them in /etc/penguin-signer.env on the VM (README.md).
+# PENGUIN_HOSTS: the public names Caddy serves (signing API + site/ pages) and
+# gets certificates for, comma-separated. Default for an IPv4 target:
+# <ip-with-dashes>.sslip.io. Secrets are never handled here; put them in
+# /etc/penguin-signer.env on the VM (README.md).
+#
+# Caddy: our config goes to /etc/caddy/penguin.caddy and the main Caddyfile only
+# gets an `import penguin.caddy` line, so other sites in it are kept.
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
@@ -17,28 +21,36 @@ fi
 target=$1
 host_part=${target#*@}
 
-if [[ -z ${SIGNER_HOST:-} ]]; then
+if [[ -z ${PENGUIN_HOSTS:-} ]]; then
   if [[ $host_part =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    SIGNER_HOST="${host_part//./-}.sslip.io"
+    PENGUIN_HOSTS="${host_part//./-}.sslip.io"
   else
-    echo "set SIGNER_HOST (the public HTTPS name), e.g. SIGNER_HOST=203-0-113-7.sslip.io" >&2
+    echo "set PENGUIN_HOSTS (the public HTTPS names), e.g. PENGUIN_HOSTS=penguin.example.org" >&2
     exit 64
   fi
 fi
-if [[ ! $SIGNER_HOST =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
-  echo "SIGNER_HOST does not look like a host name: $SIGNER_HOST" >&2
-  exit 64
-fi
+IFS=',' read -ra _hosts <<<"$PENGUIN_HOSTS"
+for h in "${_hosts[@]}"; do
+  h=${h// /}
+  if [[ ! $h =~ ^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$ ]]; then
+    echo "not a host name in PENGUIN_HOSTS: '$h'" >&2
+    exit 64
+  fi
+done
 
 src=$(cd "$(dirname "$0")/.." && pwd)
 remote_dir=penguin-signer-src
 
+site=$(cd "$src/../site" && pwd)
+
 echo "==> syncing $src to $target:$remote_dir"
 rsync -az --delete --exclude /target/ --exclude .git/ -e ssh "$src/" "$target:$remote_dir/"
+echo "==> syncing $site to $target:penguin-site"
+rsync -az --delete --exclude .nojekyll -e ssh "$site/" "$target:penguin-site/"
 
-echo "==> building and installing on $target (SIGNER_HOST=$SIGNER_HOST)"
-# shellcheck disable=SC2087  # expand SIGNER_HOST locally, the rest remotely
-ssh "$target" "SIGNER_HOST='$SIGNER_HOST' REMOTE_DIR='$remote_dir' bash -s" <<'REMOTE'
+echo "==> building and installing on $target (PENGUIN_HOSTS=$PENGUIN_HOSTS)"
+# shellcheck disable=SC2087  # expand PENGUIN_HOSTS locally, the rest remotely
+ssh "$target" "PENGUIN_HOSTS='$PENGUIN_HOSTS' REMOTE_DIR='$remote_dir' bash -s" <<'REMOTE'
 set -euo pipefail
 cd "$HOME/$REMOTE_DIR"
 
@@ -66,9 +78,24 @@ sudo mv -f /usr/local/bin/penguin-signer.new /usr/local/bin/penguin-signer
 # systemd unit.
 sudo install -m 0644 -o root -g root deploy/penguin-signer.service /etc/systemd/system/penguin-signer.service
 
-# Caddy: site config plus the SIGNER_HOST it reads.
-sudo install -m 0644 -o root -g root deploy/Caddyfile /etc/caddy/Caddyfile
-printf 'SIGNER_HOST=%s\n' "$SIGNER_HOST" | sudo install -m 0644 -o root -g root /dev/stdin /etc/caddy/penguin.env
+# Public pages.
+sudo install -d -m 0755 /srv/penguin-site
+sudo rsync -a --delete --chown=root:root --chmod=D0755,F0644 "$HOME/penguin-site/" /srv/penguin-site/
+
+# Caddy: our own file, imported from the main Caddyfile (other sites kept).
+sudo install -m 0644 -o root -g root deploy/penguin.caddy /etc/caddy/penguin.caddy
+printf 'PENGUIN_HOSTS=%s\n' "$PENGUIN_HOSTS" | sudo install -m 0644 -o root -g root /dev/stdin /etc/caddy/penguin.env
+if [[ ! -f /etc/caddy/Caddyfile ]]; then
+  sudo install -m 0644 -o root -g root deploy/Caddyfile.main /etc/caddy/Caddyfile
+elif ! sudo grep -qE '^[[:space:]]*import[[:space:]]+(/etc/caddy/)?penguin\.caddy' /etc/caddy/Caddyfile; then
+  if sudo grep -q 'SIGNER_HOST' /etc/caddy/Caddyfile; then
+    echo "!! /etc/caddy/Caddyfile still has the old {\$SIGNER_HOST} site block." >&2
+    echo "!! Remove that block, then run this again (it adds 'import penguin.caddy')." >&2
+    exit 1
+  fi
+  sudo cp -a /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.bak.$(date +%s)"
+  printf '\nimport penguin.caddy\n' | sudo tee -a /etc/caddy/Caddyfile >/dev/null
+fi
 sudo install -d -m 0755 /etc/systemd/system/caddy.service.d
 printf '[Service]\nEnvironmentFile=/etc/caddy/penguin.env\n' |
   sudo install -m 0644 -o root -g root /dev/stdin /etc/systemd/system/caddy.service.d/penguin.conf
@@ -91,7 +118,7 @@ else
   echo "!!   sudo systemctl restart penguin-signer"
 fi
 
-sudo SIGNER_HOST="$SIGNER_HOST" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+sudo PENGUIN_HOSTS="$PENGUIN_HOSTS" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 sudo systemctl enable caddy >/dev/null
 sudo systemctl restart caddy
 
@@ -103,4 +130,4 @@ else
 fi
 REMOTE
 
-echo "==> done. Check from here: curl https://$SIGNER_HOST/healthz"
+echo "==> done. Check from here: curl https://${_hosts[0]// /}/healthz"

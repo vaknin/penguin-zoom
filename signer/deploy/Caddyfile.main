@@ -1,0 +1,16 @@
+# Main Caddyfile for a fresh VM. deploy.sh installs it only when the VM has no
+# /etc/caddy/Caddyfile yet; otherwise it just appends `import penguin.caddy`.
+# Penguin's own site (signing API + public pages) is in penguin.caddy.
+
+{
+	servers {
+		timeouts {
+			read_header 5s
+			read_body 10s
+			write 15s
+			idle 60s
+		}
+	}
+}
+
+import penguin.caddy

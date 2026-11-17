@@ -96,7 +96,8 @@ Files in `deploy/`:
 - `cloud-init.yaml`: first-boot setup for the VM.
 - `deploy.sh`: build and install. Run it for the first install and for every update.
 - `penguin-signer.service`: the hardened systemd unit.
-- `Caddyfile`: the HTTPS front end.
+- `penguin.caddy`: the HTTPS front end for the signing API and the public pages (`site/`), imported from the main Caddyfile.
+- `Caddyfile.main`: the main Caddyfile, used only on a VM that has none.
 - `open-web-ports.sh`: the firewall setup.
 - `penguin-signer.env.example`: the env file layout.
 
@@ -167,20 +168,22 @@ From your machine, in the repo:
 
 ```sh
 signer/deploy/deploy.sh ubuntu@203.0.113.7
-# with your own domain later:
-SIGNER_HOST=signer.example.org signer/deploy/deploy.sh ubuntu@203.0.113.7
+# with your own domain (several names: comma-separated):
+PENGUIN_HOSTS="penguin.example.org, 203-0-113-7.sslip.io" signer/deploy/deploy.sh ubuntu@203.0.113.7
 ```
 
 The script does the following:
 
-1. Copies `signer/` to the VM with rsync, leaving out `target/`.
+1. Copies `signer/` and `site/` to the VM with rsync, leaving out `target/`.
 2. Runs `cargo build --release --locked` on the VM. The first build takes a
    few minutes on 1 OCPU.
-3. Installs `/usr/local/bin/penguin-signer`, the systemd unit, the
-   Caddyfile and `/etc/caddy/penguin.env` (`SIGNER_HOST`).
+3. Installs `/usr/local/bin/penguin-signer`, the systemd unit, the pages in
+   `/srv/penguin-site`, `/etc/caddy/penguin.caddy` and `/etc/caddy/penguin.env`
+   (`PENGUIN_HOSTS`). The main `/etc/caddy/Caddyfile` only gets an
+   `import penguin.caddy` line (backed up first), so other sites in it stay.
 4. Makes sure 80 and 443 are open, then restarts the service and Caddy.
 
-For an IP address, `SIGNER_HOST` defaults to `<ip-with-dashes>.sslip.io`.
+For an IP address, `PENGUIN_HOSTS` defaults to `<ip-with-dashes>.sslip.io`.
 That name resolves to the VM's IP, so Caddy can get a Let's Encrypt
 certificate for it. On the first deploy the script warns that the env file
 is missing. That is expected; step 5 adds it.

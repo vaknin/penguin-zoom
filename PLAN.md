@@ -540,6 +540,29 @@ The owner asked for the "half the frames lost after our page" of §5.11 to be so
 
 **WebKit pull request (§5.11):** WebKit's build bots compiled it for GTK (`gtk`, `gtk3-gcc`) and the style check passed. The maintainer (philn) asked for a shorter commit message without the Claude credit; done (commit `0414fed`), PR text updated, reply posted. **Bug filed 2026-11-17 with the owner's key (the owner allowed it): https://bugs.webkit.org/show_bug.cgi?id=331962.** bugs.webkit.org runs Bugzilla 5.0.4: the key goes in as the `api_key` parameter, not a header, and there is no `/whoami`. The bug URL is in the commit message (commit `ee74761`) and the PR is out of draft, waiting for review.
 
+### 5.13 Toward App Review: what exists, what's left (2026-11-17, afternoon)
+
+The owner asked whether to submit. Answer: not yet. Decisions from the owner: **no demo video** (it's optional; Zoom may still ask for one), the domain already exists, the signer was believed to be running.
+
+**Checked**
+- **Domain: `kitah.co.il`** (owner's, registered 2026-11-11 via Jetserver, valid to 2027-11-11, DNS on Cloudflare). `kitah.co.il`, `www` and `penguin.kitah.co.il` all point at the Oracle VM (`82.70.221.64`, `~/Projects/VM/README.md`). `kitah.co.il` serves a "Coming soon" page; **`penguin.kitah.co.il` fails TLS**: Caddy on the VM has no site for that name yet.
+- **Signer: running** at `https://82-70-221-64.sslip.io` (`/healthz` 200; `/v1/signature` returns a JWT with appKey `QIyq0AOWRRCCEFesq_s52w`, role 0, `video_webrtc_mode` 0). The app signs through it (`PENGUIN_SIGNER_URL=…sslip.io`, `--server-only`, `/api/signature` → `[sig] remote signature`). Not yet used for a real join.
+
+**Changed**
+- `src/server.rs`: `DEFAULT_SIGNER_URL = "https://penguin.kitah.co.il"`. **Joins fail until the VM serves that name** (below); for tests before then use `PENGUIN_SIGNER_URL=https://82-70-221-64.sslip.io`, or `PENGUIN_SIGNER_URL=` (empty) to sign locally.
+- `signer/deploy/`: Penguin's Caddy config is now its own file, `penguin.caddy` (signing API under `/v1/*` and `/healthz`, the `site/` pages from `/srv/penguin-site` for everything else, page CSP `default-src 'self'`), imported from the main Caddyfile so the `kitah.co.il` site is kept. `deploy.sh` copies `site/` too, takes `PENGUIN_HOSTS` (comma-separated; was `SIGNER_HOST`), backs up the main Caddyfile and appends `import penguin.caddy`; it stops if the main file still has the old `{$SIGNER_HOST}` block. `Caddyfile` renamed `Caddyfile.main` (used only on a VM without one). **Not run**: SSH to the VM was refused by the session's permission check.
+- `site/privacy.html`, `site/docs.html`: they said tokens live in memory only and the site is on GitHub Pages. Now: refresh token in the system keyring, removed on sign-out; the site is hosted on Oracle with the signer.
+- `web/glue.js` `fit()`: asks Zoom for our area's size (`default` and `ribbon`), measures the largest box Zoom drew, asks again minus the overflow (up to 3 passes), then scales Zoom's view down to fit if it still overflows (logs `glue: fit scaled …`). Re-fits on resize of `#zoomRoot` (window, chat panel) and on `peer-share-state-change`. **Not run in a meeting** (the phone was off adb).
+
+**Left before submitting**
+1. Deploy: `PENGUIN_HOSTS="penguin.kitah.co.il, 82-70-221-64.sslip.io" signer/deploy/deploy.sh ubuntu@82.70.221.64` (look at the VM's `/etc/caddy/Caddyfile` first; if it has the old `{$SIGNER_HOST}` block, remove it). Then check `https://penguin.kitah.co.il/healthz` and `/privacy.html`.
+2. Marketplace (owner, in the browser): rename the app to **Penguin for Zoom**; set Terms/Privacy/Support/Docs URLs to `https://penguin.kitah.co.il/…`; verify the domain (Zoom gives a TXT record for Cloudflare, or a file for `site/`); event subscription `app_deauthorized` → `https://penguin.kitah.co.il/v1/zoom-webhook`, then its secret as `ZOOM_WEBHOOK_SECRET=` in `/etc/penguin-signer.env`.
+3. Sign-in, ZAK join, hosting and sign-out with revoke against real Zoom (§5.5 step 5; needs the owner once).
+4. A meeting run: a join signed by the hosted signer, the new `fit()` (step `layout`, with and without a share), the share crash soak.
+5. The real-desktop session (§5.5 step 6), device switching, speaker routing, Active Apps button.
+6. Test plan for the reviewers (written, no video).
+7. The public repo `vaknin/penguin-zoom` carries `PLAN.md` (at `ef4e831`, including §8's notes on review risk). Reviewers can find it from the site's links. Owner's call whether that file stays public.
+
 ## 6. Later (only if the owner keeps using it)
 
 - **App Review** so the app can join meetings outside the owner's account: production credentials, test plan, least-privilege scopes, uninstall handling, privacy policy and support URL; reviewers may ask for a demo video, and may ask why the app needs a public client ID. Passing review doesn't force a public listing; the app can stay unlisted.

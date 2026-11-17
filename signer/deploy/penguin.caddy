@@ -1,0 +1,44 @@
+# Penguin for Zoom on the VM: public pages (site/) and the signing service, on
+# one host. Installed to /etc/caddy/penguin.caddy by deploy.sh and pulled into
+# the main /etc/caddy/Caddyfile with `import penguin.caddy`, so other sites in
+# the main file (e.g. kitah.co.il) are left alone.
+#
+# PENGUIN_HOSTS comes from /etc/caddy/penguin.env (written by deploy.sh): one or
+# more host names, comma-separated, e.g. "penguin.kitah.co.il, 82-70-221-64.sslip.io".
+#
+# No access log: Caddy's access logs contain client IPs and we don't keep them.
+
+{$PENGUIN_HOSTS} {
+	request_body {
+		max_size 4KB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	@api path /v1/* /healthz
+	handle @api {
+		header {
+			Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+			Cross-Origin-Resource-Policy "same-origin"
+			Cache-Control "no-store"
+		}
+		# Caddy replaces any client-sent X-Forwarded-For with the real peer
+		# address (no trusted_proxies configured), which the signer rate-limits on.
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# Everything else: the static pages. A Zoom domain-verification file, if
+	# Zoom asks for one, goes in site/ and is served from here too.
+	handle {
+		header Content-Security-Policy "default-src 'self'; frame-ancestors 'none'"
+		root * /srv/penguin-site
+		try_files {path} {path}.html
+		file_server
+	}
+}

@@ -198,14 +198,54 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
   }
 
   // ---- video area sizing: Zoom's view fills our root ----
+  // Zoom adds room for its own header and toolbar to the size we ask for, and
+  // ignores viewSizes while showing a share (live test 2026-11-17: #zoomRoot
+  // 1268x573, Zoom's container 1272x728, running under our control bar). So
+  // ask, measure what Zoom drew, ask again minus the overflow, and if it still
+  // doesn't fit, scale Zoom's view down to fit (centred).
+  let fitTimer = 0;
+  let fitSeq = 0;
+  function zoomBox() {
+    // The largest laid-out box inside our root: Zoom's outer container.
+    let best = null, area = 0;
+    for (const el of root.querySelectorAll('div')) {
+      if (el.closest('.zc-collapsed')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width * r.height > area) { area = r.width * r.height; best = r; }
+    }
+    return best;
+  }
   function fit() {
+    clearTimeout(fitTimer);
+    fitTimer = setTimeout(fitNow, 120);
+  }
+  async function fitNow() {
     if (!client || !root || !client.getCurrentMeetingInfo()?.isInMeeting) return;
+    const seq = ++fitSeq;
+    const inner = root.firstElementChild;
+    if (inner) inner.style.transform = '';
     const r = root.getBoundingClientRect();
-    try {
-      client.updateVideoOptions({
-        viewSizes: { default: { width: Math.round(r.width), height: Math.round(r.height) } },
-      });
-    } catch (e) { log('warn', 'glue: updateVideoOptions ' + e.message); }
+    let w = Math.round(r.width), h = Math.round(r.height);
+    for (let pass = 0; pass < 3; pass++) {
+      try { await client.updateVideoOptions({ viewSizes: { default: { width: w, height: h }, ribbon: { width: w, height: h } } }); }
+      catch (e) { log('warn', 'glue: updateVideoOptions ' + (e?.message || e?.reason || e)); break; }
+      await sleep(250);
+      if (seq !== fitSeq) return;
+      const z = zoomBox();
+      if (!z) return;
+      const dw = Math.round(z.width - r.width), dh = Math.round(z.height - r.height);
+      if (dw <= 2 && dh <= 2) return;
+      if (pass === 2) break;
+      w = Math.max(160, w - Math.max(0, dw));
+      h = Math.max(120, h - Math.max(0, dh));
+    }
+    const z = zoomBox();
+    if (!inner || !z || seq !== fitSeq) return;
+    const k = Math.min(r.width / z.width, r.height / z.height, 1);
+    if (k >= 0.995) return;
+    inner.style.transformOrigin = '0 0';
+    inner.style.transform = `translate(${Math.round((r.width - z.width * k) / 2)}px, 0) scale(${k.toFixed(4)})`;
+    log('info', `glue: fit scaled Zoom's view ${Math.round(z.width)}x${Math.round(z.height)} by ${k.toFixed(3)} into ${Math.round(r.width)}x${Math.round(r.height)}`);
   }
 
   // ---- state snapshots for the UI ----
@@ -566,6 +606,10 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
       if (p && p.state === 'Closed') { stopJoinTimers(); seenChat.clear(); send({ type: 'left' }); }
       snapshot();
     });
+    // Re-fit when our area changes (window, chat panel) and when a share
+    // starts or stops: Zoom switches to a share layout with its own size.
+    new ResizeObserver(() => fit()).observe(root);
+    client.on('peer-share-state-change', () => { fit(); setTimeout(fit, 1500); });
     client.on('active-speaker', (p) => { speakerId = Array.isArray(p) && p[0] ? p[0].userId : null; snapshot(); });
     for (const ev of ['user-added', 'user-removed', 'user-updated', 'peer-share-state-change']) {
       client.on(ev, () => snapshot());

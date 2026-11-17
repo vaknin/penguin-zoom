@@ -170,7 +170,7 @@ bind = SUPER SHIFT, L, exec, penguin-zoom --cmd leave</code></pre>
     <h2 id="remove">9. Remove the app</h2>
     <p>Do any or all of these, in this order:</p>
     <ol>
-      <li><strong>Sign out</strong>: Settings (<kbd>,</kbd>) → Account → <strong>Sign out</strong>. This revokes the app's access token with Zoom and clears it from memory.</li>
+      <li><strong>Sign out</strong>: Settings (<kbd>,</kbd>) → Account → <strong>Sign out</strong>. This revokes the app's access token with Zoom and deletes the saved sign-in from your keyring.</li>
       <li><strong>Remove the app from your Zoom account</strong>: sign in at <a href="https://marketplace.zoom.us/user/installed">marketplace.zoom.us/user/installed</a>, find <strong>Penguin for Zoom</strong>, and choose <strong>Remove</strong>. This cancels all access the app had to your account, even on other computers.</li>
       <li><strong>Uninstall the program</strong>:
 <pre><code>sudo pacman -R penguin-zoom</code></pre></li>
@@ -203,7 +203,7 @@ bind = SUPER SHIFT, L, exec, penguin-zoom --cmd leave</code></pre>
     <h3>Signing in</h3>
     <ul>
       <li><strong>Sign-in page does not load</strong>: check your internet connection and that nothing else on your computer uses port 53682.</li>
-      <li><strong>"Signed in" disappears after a restart</strong>: expected. Sign-in is kept only in memory; sign in again.</li>
+      <li><strong>"Signed in" disappears after a restart</strong>: the app keeps your sign-in in the system keyring (GNOME Keyring or another Secret Service provider). Make sure one is installed and unlocked, then sign in again.</li>
       <li><strong>Your organisation blocks the app</strong>: some Zoom accounts only allow apps an admin has approved. Ask your Zoom admin.</li>
     </ul>
     <h3>Joining</h3>

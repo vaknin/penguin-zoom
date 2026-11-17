@@ -22,7 +22,6 @@ pub struct Settings {
     pub join_muted: bool,
     pub join_camera_off: bool,
     pub hide_idle: bool,
-    pub follow_theme: bool,
     pub name: String,
     /// PulseAudio sink name to route our playback to; None = system default.
     pub speaker_id: Option<String>,
@@ -44,7 +43,6 @@ impl Default for Settings {
             join_muted: true,
             join_camera_off: false,
             hide_idle: true,
-            follow_theme: true,
             name: String::new(),
             speaker_id: None,
             camera: None,
@@ -123,7 +121,7 @@ mod tests {
         assert_eq!(
             v,
             serde_json::json!({"style":"standard","joinMuted":true,"joinCameraOff":false,
-                "hideIdle":true,"followTheme":true,"name":"","speakerId":null,
+                "hideIdle":true,"name":"","speakerId":null,
                 "camera":null,"mic":null,"cameraId":null,"micId":null})
         );
     }

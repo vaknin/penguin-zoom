@@ -635,7 +635,7 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     window.addEventListener('resize', fit);
     setInterval(() => { snapshot(); if (client.getCurrentMeetingInfo()?.isInMeeting) breakoutSnapshot(); }, 2000);
 
-    // Commands from the desktop (Hyprland binds call `penguin-zoom --cmd …`).
+    // Commands from the desktop (shortcuts that run `penguin-zoom --cmd …`).
     try {
       const es = new EventSource('/api/events');
       es.onmessage = (e) => emit(e.data);

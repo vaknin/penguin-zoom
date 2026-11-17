@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Penguin for Zoom
+Name=penguin
 GenericName=Video meetings
 Comment=Join Zoom meetings in a light Linux window
 Exec=penguin-zoom %u

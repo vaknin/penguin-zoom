@@ -18,7 +18,7 @@ const ICONS = {
   speaker: 'M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM4 21h4M10 21h4M16 21h4',
   gallery: 'M3 4h7v7H3zM14 4h7v7h-7zM3 15h7v6H3zM14 15h7v6h-7z',
   sliders: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M16 4v4M8 10v4M18 16v4',
-  gear: 'M12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6zM12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1',
+  gear: 'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2zM15 12a3 3 0 1 1-6 0a3 3 0 1 1 6 0z', // Lucide 'settings' (ISC)
   leave: 'M10 17l5-5-5-5M15 12H3M14 3h4a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3h-4',
   x: 'M6 6l12 12M18 6L6 18',
   send: 'M5 12h14M13 6l6 6-6 6',
@@ -45,7 +45,7 @@ document.querySelectorAll('svg[data-icon]').forEach((s) => setIcon(s, s.dataset.
 const S = {
   screen: 'idle',
   launch: null, // { number, pwd, link }
-  settings: { style: 'standard', joinMuted: true, joinCameraOff: false, hideIdle: true, followTheme: true, name: '', speakerId: null },
+  settings: { style: 'standard', joinMuted: true, joinCameraOff: false, hideIdle: true, name: '', speakerId: null },
   account: { signedIn: false, user: null, configured: false },
   joinMic: true,
   joinCam: true,
@@ -510,6 +510,23 @@ function renderSettings() {
   btn.dataset.action = a.signedIn ? 'signout' : 'signin';
   btn.textContent = a.signedIn ? 'Sign out' : 'Sign in';
 }
+// Sign-in runs in the user's default browser (their saved passwords live
+// there); Zoom returns to our local server, which sends an 'account' event.
+async function signIn() {
+  try {
+    const r = await fetch('/api/signin', { method: 'POST' });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+    $('acctHint').textContent = 'Finish signing in in your browser, then come back here.';
+  } catch (e) { showError("Couldn't open your browser to sign in: " + (e.message || e)); }
+}
+async function refreshAccount() {
+  try {
+    const st = await api('/api/status');
+    S.account = { signedIn: !!st.signedIn, user: st.user || null, configured: !!st.publicClientConfigured };
+  } catch {}
+  renderSettings();
+  if (S.screen === 'join') renderJoin?.();
+}
 // Revokes the app's Zoom access (Zoom's uninstall rule) and forgets the tokens.
 async function signOut() {
   try {
@@ -521,24 +538,6 @@ async function signOut() {
   renderSettings();
 }
 function applyStyle() { body.dataset.style = S.settings.style === 'keyboard' ? 'keyboard' : 'standard'; requestAnimationFrame(() => zc.fit()); }
-async function applyTheme() {
-  const r = document.documentElement.style;
-  for (const k of ['--bg', '--fg', '--accent', '--surface', '--raised', '--hover', '--active', '--line', '--on-accent']) r.removeProperty(k);
-  if (!S.settings.followTheme) return;
-  let t = null;
-  try { t = await api('/api/theme'); } catch {}
-  if (!t || !t.bg || !t.fg) return;
-  r.setProperty('--bg', t.bg);
-  r.setProperty('--fg', t.fg);
-  if (t.accent) r.setProperty('--accent', t.accent);
-  r.setProperty('--on-accent', t.bg);
-  const mix = (p) => `color-mix(in srgb, ${t.fg} ${p}%, ${t.bg})`;
-  r.setProperty('--surface', mix(5));
-  r.setProperty('--raised', mix(7));
-  r.setProperty('--hover', mix(9));
-  r.setProperty('--active', mix(11));
-  r.setProperty('--line', mix(13));
-}
 
 // ---------- events from glue / Rust ----------
 function onEvent(json) {
@@ -571,6 +570,7 @@ function onEvent(json) {
       break;
     case 'open': openLink(e.number ? { number: e.number, pwd: e.pwd || '', link: e.link } : parseLink(e.link)); break;
     case 'cmd': runCmd(e.cmd); break;
+    case 'account': refreshAccount(); break;
   }
 }
 function runCmd(cmd) {
@@ -616,7 +616,7 @@ function act(a, el) {
     case 'settings-close': closeSettings(); break;
     case 'style-standard': S.settings.style = 'standard'; applyStyle(); renderSettings(); putSettings(); break;
     case 'style-keyboard': S.settings.style = 'keyboard'; applyStyle(); renderSettings(); putSettings(); break;
-    case 'signin': location.href = '/oauth/login'; break;
+    case 'signin': signIn(); break;
     case 'signout': signOut(); break;
     case 'rename': startRename(el); break;
   }
@@ -630,7 +630,6 @@ document.addEventListener('click', (e) => {
     S.settings[k] = !S.settings[k];
     if (k === 'joinMuted') S.joinMic = !S.settings.joinMuted;
     if (k === 'joinCameraOff') S.joinCam = !S.settings.joinCameraOff;
-    if (k === 'followTheme') applyTheme();
     renderSettings();
     putSettings();
     return;
@@ -664,6 +663,12 @@ document.addEventListener('keydown', (e) => {
     if (!$('settings').hidden) closeSettings();
     else if (S.devicesOpen) closeDevices();
     else if (S.panel) setPanel(null);
+    return;
+  }
+  // F11: fullscreen on/off (the window opens fullscreen). Works while typing too.
+  if (e.key === 'F11') {
+    e.preventDefault();
+    fetch('/api/window', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'fullscreen-toggle' }) }).catch(() => {});
     return;
   }
   if (e.target.closest('input, textarea')) return;
@@ -710,7 +715,6 @@ async function start() {
   S.joinMic = !S.settings.joinMuted;
   S.joinCam = !S.settings.joinCameraOff;
   applyStyle();
-  applyTheme();
   try {
     const st = await api('/api/status');
     S.account = { signedIn: !!st.signedIn, user: st.user || null, configured: !!st.publicClientConfigured };

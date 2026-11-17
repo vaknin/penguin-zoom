@@ -1,5 +1,4 @@
-/* Quiet dark theme (mockup v2). Colours are tokens so the Omarchy theme can
-   override --bg, --fg and --accent at runtime (app.js, "Follow the Omarchy theme"). */
+/* Quiet dark theme (mockup v2). Colours are tokens (--bg, --fg, --accent, …). */
 :root {
   color-scheme: dark;
   --bg: #101113;

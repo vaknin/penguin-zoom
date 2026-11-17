@@ -24,16 +24,26 @@ mod screencast;
 mod server;
 mod settings;
 mod speakers;
-mod theme;
 
 use gtk::glib::{self, prelude::*};
 use tao::{
     dpi::LogicalSize,
     event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::{ControlFlow, EventLoopBuilder},
     platform::unix::WindowExtUnix,
-    window::WindowBuilder,
+    window::{Fullscreen, WindowBuilder},
 };
+
+/// Requests to the window from other threads (signals, the local server).
+#[derive(Debug, Clone, Copy)]
+enum UiEvent {
+    /// Leave the meeting and quit (window close, SIGTERM/SIGINT/SIGHUP).
+    Close,
+    /// Bring the window to the front (sign-in finished, a second launch).
+    Raise,
+    /// F11 in the page.
+    ToggleFullscreen,
+}
 use webkit2gtk::{
     DeviceInfoPermissionRequest, HardwareAccelerationPolicy, PermissionRequestExt, SettingsExt,
     UserMediaPermissionRequest, UserMediaPermissionRequestExt, WebViewExt,
@@ -174,10 +184,27 @@ fn main() {
         });
     });
 
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoopBuilder::<UiEvent>::with_user_event().build();
+    // The local server asks the window for things through this hook.
+    {
+        let proxy = std::sync::Mutex::new(event_loop.create_proxy());
+        let _ = server::WINDOW_HOOK.set(Box::new(move |what: &str| {
+            let ev = match what {
+                "raise" => UiEvent::Raise,
+                "fullscreen-toggle" => UiEvent::ToggleFullscreen,
+                _ => return,
+            };
+            if let Ok(p) = proxy.lock() {
+                let _ = p.send_event(ev);
+            }
+        }));
+    }
+    // Opens fullscreen on any desktop; F11 toggles it (the page forwards the
+    // key, see ui/app.js). The size is what un-fullscreening returns to.
     let window = WindowBuilder::new()
         .with_title("Penguin for Zoom")
         .with_inner_size(LogicalSize::new(1280.0, 860.0))
+        .with_fullscreen(Some(Fullscreen::Borderless(None)))
         .build(&event_loop)
         .expect("window");
 
@@ -213,14 +240,26 @@ fn main() {
     for sig in [1, 2, 15] {
         let proxy = event_loop.create_proxy();
         glib::unix_signal_add(sig, move || {
-            let _ = proxy.send_event(());
+            let _ = proxy.send_event(UiEvent::Close);
             glib::ControlFlow::Continue
         });
     }
     let mut closing: Option<std::time::Instant> = None;
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
-        if matches!(event, Event::WindowEvent { event: WindowEvent::CloseRequested, .. } | Event::UserEvent(())) {
+        match event {
+            Event::UserEvent(UiEvent::Raise) => {
+                window.set_visible(true);
+                window.set_minimized(false);
+                window.set_focus();
+            }
+            Event::UserEvent(UiEvent::ToggleFullscreen) => {
+                let on = window.fullscreen().is_none();
+                window.set_fullscreen(on.then_some(Fullscreen::Borderless(None)));
+            }
+            _ => {}
+        }
+        if matches!(event, Event::WindowEvent { event: WindowEvent::CloseRequested, .. } | Event::UserEvent(UiEvent::Close)) {
             if closing.is_none() {
                 let _ = webview.evaluate_script("try { window.zc && zc.leave() } catch (e) {}");
                 window.set_visible(false);

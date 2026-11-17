@@ -9,6 +9,7 @@
 //!   GET  /glue.js          web/glue.js
 //!   GET  /spike, /spike.js the spike page
 //!   GET  /sdk/*            vendored Zoom Meeting SDK (assets/zoom-sdk)
+//!   POST /api/signin       sign-in in the default browser (public client, PKCE)
 //!   GET  /oauth/login, /oauth/callback   sign-in (public client, PKCE)
 //!   POST /api/signature    SDK join signature
 //!   GET  /api/zak, /api/status
@@ -19,7 +20,6 @@
 //!   GET/POST /api/speakers output device (routed natively, see speakers.rs)
 //!   GET  /api/events       SSE: {"type":"cmd",…} and {"type":"open",…}
 //!   POST /api/cmd          broadcast a command (global hotkeys, `--cmd`)
-//!   GET  /api/theme        current Omarchy colours or null
 
 use std::{
     collections::HashMap,
@@ -48,7 +48,7 @@ use tokio::sync::{Mutex, broadcast};
 use tokio_stream::{Stream, StreamExt, wrappers::BroadcastStream};
 use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
 
-use crate::{launch::Launch, settings::Settings, speakers, theme};
+use crate::{launch::Launch, settings::Settings, speakers};
 
 pub const ADDR: &str = "127.0.0.1:53682";
 pub const ORIGIN: &str = "http://127.0.0.1:53682";
@@ -112,6 +112,8 @@ pub async fn run(root: PathBuf, listener: std::net::TcpListener, launch: Option<
         .route("/spike.js", get(spike_js))
         .route("/oauth/login", get(oauth_login))
         .route("/oauth/callback", get(oauth_callback))
+        .route("/api/signin", post(signin_browser))
+        .route("/api/window", post(window_action))
         .route("/api/signature", post(signature))
         .route("/api/zak", get(zak))
         .route("/api/status", get(status))
@@ -123,7 +125,6 @@ pub async fn run(root: PathBuf, listener: std::net::TcpListener, launch: Option<
         .route("/api/speakers", get(get_speakers).post(set_speaker))
         .route("/api/events", get(events))
         .route("/api/cmd", post(cmd))
-        .route("/api/theme", get(get_theme))
         .route("/api/screencast", get(screencast_ws))
         .route("/screencast.js", get(screencast_js))
         .nest_service("/sdk", ServeDir::new(root.join("assets/zoom-sdk")))
@@ -394,12 +395,36 @@ fn random_b64(n: usize) -> String {
 }
 
 async fn oauth_login(State(s): State<AppState>) -> Response {
-    let Some(client_id) = public_client_id() else {
-        return err(
-            StatusCode::PRECONDITION_FAILED,
-            "ZOOM_PUBLIC_CLIENT_ID not set (PLAN.md owner item 4)",
-        );
+    match authorize_url(&s).await {
+        Some(u) => {
+            eprintln!("[oauth] redirecting to zoom.us/oauth/authorize");
+            Redirect::to(&u).into_response()
+        }
+        None => err(StatusCode::PRECONDITION_FAILED, "no public client ID"),
+    }
+}
+
+/// Sign-in happens in the user's own browser (their saved passwords and
+/// password manager are there, not in our web view): the app asks for this,
+/// we open Zoom's authorize page with xdg-open, and Zoom sends the browser back
+/// to /oauth/callback here. POST, so the origin check in `local_only` applies
+/// and another web page can't start a sign-in.
+async fn signin_browser(State(s): State<AppState>) -> Response {
+    let Some(u) = authorize_url(&s).await else {
+        return err(StatusCode::PRECONDITION_FAILED, "no public client ID");
     };
+    match tokio::process::Command::new("xdg-open").arg(&u).spawn() {
+        Ok(_) => {
+            eprintln!("[oauth] opened zoom.us/oauth/authorize in the default browser");
+            Json(json!({ "ok": true })).into_response()
+        }
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &format!("could not open the browser: {e}")),
+    }
+}
+
+/// Starts a PKCE sign-in: fresh verifier and state, Zoom's authorize URL.
+async fn authorize_url(s: &AppState) -> Option<String> {
+    let client_id = public_client_id()?;
     let verifier = random_b64(48);
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
     let st = random_b64(16);
@@ -416,8 +441,29 @@ async fn oauth_login(State(s): State<AppState>) -> Response {
         .append_pair("code_challenge", &challenge)
         .append_pair("code_challenge_method", "S256")
         .append_pair("state", &st);
-    eprintln!("[oauth] redirecting to zoom.us/oauth/authorize");
-    Redirect::to(u.as_str()).into_response()
+    Some(u.into())
+}
+
+/// What the browser shows at the end of a sign-in. The app window gets an
+/// `account` event and comes to the front, so the tab can just be closed.
+fn browser_page(ok: bool, detail: &str) -> Response {
+    let (title, body) = if ok {
+        ("Signed in", "You're signed in to Penguin. You can close this tab and go back to Penguin.".to_string())
+    } else {
+        ("Sign-in didn't finish", format!("Penguin couldn't finish signing in: {}. Close this tab and press Sign in in Penguin again.", html_escape(detail)))
+    };
+    let html = format!(
+        "<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\">\
+         <title>{title} · Penguin</title><style>body{{margin:0;min-height:100vh;display:grid;place-items:center;\
+         background:#111214;color:#e8e8ea;font:16px/1.5 system-ui,sans-serif}}main{{max-width:30rem;padding:24px;text-align:center}}\
+         h1{{font-size:22px;margin:0 0 8px}}p{{color:#a0a0a8;margin:0}}</style><main><h1>{title}</h1><p>{body}</p></main></html>"
+    );
+    let code = if ok { StatusCode::OK } else { StatusCode::BAD_REQUEST };
+    (code, [(header::CONTENT_TYPE, "text/html; charset=utf-8")], html).into_response()
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 async fn oauth_callback(
@@ -425,23 +471,23 @@ async fn oauth_callback(
     Query(q): Query<HashMap<String, String>>,
 ) -> Response {
     if let Some(e) = q.get("error") {
-        return err(StatusCode::BAD_REQUEST, &format!("authorize error: {e}"));
+        return browser_page(false, &format!("authorize error: {e}"));
     }
     let Some(code) = q.get("code") else {
-        return err(StatusCode::BAD_REQUEST, "no code in callback");
+        return browser_page(false, "no code in callback");
     };
     // Check state before consuming the verifier, so a stray hit on this URL
     // (e.g. from another web page) can't cancel a sign-in in progress.
     let verifier = {
         let mut sess = s.session.lock().await;
         if sess.pkce_state.is_none() || q.get("state") != sess.pkce_state.as_ref() {
-            return err(StatusCode::BAD_REQUEST, "state mismatch; start at /oauth/login");
+            return browser_page(false, "this sign-in link expired or was already used");
         }
         sess.pkce_state = None;
         sess.pkce_verifier.take()
     };
     let Some(verifier) = verifier else {
-        return err(StatusCode::BAD_REQUEST, "no PKCE verifier; start at /oauth/login");
+        return browser_page(false, "this sign-in link expired or was already used");
     };
     let client_id = public_client_id().unwrap_or_default();
     // Public client: client_id in the form body, no Authorization header.
@@ -462,11 +508,11 @@ async fn oauth_callback(
             let st = r.status();
             let v = r.json().await.unwrap_or_default();
             if !st.is_success() {
-                return err(StatusCode::BAD_GATEWAY, &format!("token exchange {st}: {}", redact(&v)));
+                return browser_page(false, &format!("token exchange {st}: {}", redact(&v)));
             }
             v
         }
-        Err(e) => return err(StatusCode::BAD_GATEWAY, &format!("token exchange: {e}")),
+        Err(e) => return browser_page(false, &format!("could not reach Zoom ({e})")),
     };
     let access = tok["access_token"].as_str().map(str::to_owned);
     let refresh = tok["refresh_token"].as_str().map(str::to_owned);
@@ -481,7 +527,10 @@ async fn oauth_callback(
         sess.refresh_token = refresh;
         sess.keyring_checked = true;
     }
-    Redirect::to("/").into_response()
+    // Tell the window (it refreshes its account line) and bring it forward.
+    let _ = s.events.send(json!({ "type": "account" }).to_string());
+    raise_window().await;
+    browser_page(true, "")
 }
 
 // The sign-in survives restarts through the refresh token in the keyring
@@ -736,9 +785,39 @@ async fn open(State(s): State<AppState>, Json(req): Json<OpenReq>) -> Response {
     Json(json!({ "ok": true, "parsed": parsed.is_some() })).into_response()
 }
 
-/// Best effort: focus our window in Hyprland. 0.56 dispatches Lua; older
-/// versions take the classic dispatcher syntax.
+/// Set by main(): asks the window to do something ("raise",
+/// "fullscreen-toggle"). Unset in --server-only and in tests.
+pub static WINDOW_HOOK: std::sync::OnceLock<Box<dyn Fn(&str) + Send + Sync>> = std::sync::OnceLock::new();
+
+fn window_do(what: &str) {
+    if let Some(h) = WINDOW_HOOK.get() {
+        h(what);
+    }
+}
+
+#[derive(Deserialize)]
+struct WindowReq {
+    action: String,
+}
+
+/// The page forwards window keys (F11) here; the web view can't change its
+/// own window. POST, so `local_only` checks the origin.
+async fn window_action(Json(req): Json<WindowReq>) -> Response {
+    match req.action.as_str() {
+        "fullscreen-toggle" | "raise" => {
+            window_do(&req.action);
+            Json(json!({ "ok": true })).into_response()
+        }
+        other => err(StatusCode::BAD_REQUEST, &format!("unknown window action {other:?}")),
+    }
+}
+
+/// Bring our window to the front: through the window itself (any desktop),
+/// plus a Hyprland focus as a best effort, since Wayland compositors may
+/// ignore a focus request that comes without user activation. On other
+/// desktops `hyprctl` isn't there and this part does nothing.
 async fn raise_window() {
+    window_do("raise");
     let run = |args: &'static [&'static str]| async move {
         tokio::process::Command::new("hyprctl").args(args).output().await.ok().filter(|o| {
             let out = String::from_utf8_lossy(&o.stdout);
@@ -838,12 +917,6 @@ async fn set_speaker(State(s): State<AppState>, Json(req): Json<SpeakerReq>) -> 
         Ok(l) => Json(l).into_response(),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
-}
-
-// ---------- theme ----------
-
-async fn get_theme() -> Json<Option<theme::Theme>> {
-    Json(theme::current().await)
 }
 
 // ---------- helpers ----------

@@ -40,7 +40,7 @@
         <li><a href="#add">Add the app to your Zoom account (sign in)</a></li>
         <li><a href="#use">Use the app</a></li>
         <li><a href="#keys">Keyboard keys</a></li>
-        <li><a href="#hyprland">Desktop-wide keys (Hyprland)</a></li>
+        <li><a href="#keys">Desktop-wide keys</a></li>
         <li><a href="#settings">Settings</a></li>
         <li><a href="#data">How your data is handled</a></li>
         <li><a href="#remove">Remove the app</a></li>
@@ -127,6 +127,7 @@
         <tr><td><kbd>g</kbd></td><td>Switch gallery and speaker view</td></tr>
         <tr><td><kbd>d</kbd></td><td>Open or close the devices pop-up</td></tr>
         <tr><td><kbd>,</kbd></td><td>Open Settings</td></tr>
+        <tr><td><kbd>F11</kbd></td><td>Fullscreen on or off (Penguin opens fullscreen)</td></tr>
         <tr><td><kbd>Esc</kbd></td><td>Close Settings, the devices pop-up or the side panel</td></tr>
         <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd></td><td>Leave the meeting</td></tr>
         <tr><td><kbd>Enter</kbd></td><td>Join (on the join screen)</td></tr>
@@ -135,23 +136,19 @@
     </table>
     </div>
 
-    <h2 id="hyprland">6. Desktop-wide keys (Hyprland)</h2>
+    <h2 id="keys">6. Desktop-wide keys</h2>
     <p>Mute or leave from anywhere on the desktop, even when Penguin is not focused. The app accepts these commands while it runs:</p>
 <pre><code>penguin-zoom --cmd mute-toggle
 penguin-zoom --cmd camera-toggle
 penguin-zoom --cmd leave
 penguin-zoom --cmd raise</code></pre>
-    <p>Suggested Hyprland bindings (classic <code>hyprland.conf</code> syntax; the package also ships a snippet in <code>/usr/share/penguin-zoom/</code>):</p>
-<pre><code>bind = SUPER SHIFT, M, exec, penguin-zoom --cmd mute-toggle
-bind = SUPER SHIFT, L, exec, penguin-zoom --cmd leave</code></pre>
-    <p><kbd>Super</kbd> <kbd>Shift</kbd> <kbd>M</kbd> mutes or unmutes; <kbd>Super</kbd> <kbd>Shift</kbd> <kbd>L</kbd> leaves the meeting. Other desktops can bind the same commands in their own shortcut settings.</p>
+    <p>Add keyboard shortcuts for them in your desktop's settings (GNOME: Settings, Keyboard, Custom Shortcuts; KDE: System Settings, Shortcuts; Hyprland, Sway and others: their config file). For example, <kbd>Super</kbd> <kbd>Shift</kbd> <kbd>M</kbd> for mute and <kbd>Super</kbd> <kbd>Shift</kbd> <kbd>L</kbd> for leave.</p>
 
     <h2 id="settings">7. Settings</h2>
     <ul>
       <li><strong>Interface style</strong>: Standard (a floating control bar with labels) or Keyboard (key hints instead of buttons). All keys work in both.</li>
       <li><strong>Join with microphone muted</strong> (on by default) and <strong>Join with camera off</strong>.</li>
       <li><strong>Hide controls when idle</strong>.</li>
-      <li><strong>Follow the desktop theme</strong>: use your Omarchy theme colours, if you use Omarchy.</li>
       <li><strong>Speaker</strong>: chosen in Devices; Penguin sends its sound to that output without changing your system default.</li>
       <li><strong>Account</strong>: sign in or sign out of Zoom.</li>
     </ul>

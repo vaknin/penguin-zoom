@@ -160,13 +160,13 @@
       <div class="switch-row"><span><span>Join with microphone muted</span><span class="dim small">Unmute when you are ready</span></span><button role="switch" class="switch" data-setting="joinMuted" aria-label="Join with microphone muted"></button></div>
       <div class="switch-row"><span><span>Join with camera off</span><span class="dim small">The preview still shows before you join</span></span><button role="switch" class="switch" data-setting="joinCameraOff" aria-label="Join with camera off"></button></div>
       <div class="switch-row"><span><span>Hide controls when idle</span><span class="dim small">They come back when the mouse moves</span></span><button role="switch" class="switch" data-setting="hideIdle" aria-label="Hide controls when idle"></button></div>
-      <div class="switch-row"><span><span>Follow the Omarchy theme</span><span class="dim small">Use the desktop colours</span></span><button role="switch" class="switch" data-setting="followTheme" aria-label="Follow the Omarchy theme"></button></div>
     </section>
     <section>
       <h2>From anywhere on the desktop</h2>
-      <p class="dim">Add to <code>~/.config/hypr/bindings.lua</code>:</p>
-      <pre class="mono">o.bind("SUPER + SHIFT + M", "Zoom: mute/unmute", "penguin-zoom --cmd mute-toggle")
-o.bind("SUPER + SHIFT + L", "Zoom: leave meeting", "penguin-zoom --cmd leave")</pre>
+      <p class="dim">To mute or leave while another window has focus, add keyboard shortcuts in your desktop's settings that run these commands:</p>
+      <pre class="mono">penguin-zoom --cmd mute-toggle
+penguin-zoom --cmd leave</pre>
+      <p class="dim"><kbd>F11</kbd> turns fullscreen on and off.</p>
     </section>
     <section>
       <h2>Account</h2>

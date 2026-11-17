@@ -86,6 +86,7 @@ body.panel-open #zoomRoot { right: 372px; }
 .primary:disabled { opacity: 0.6; cursor: default; }
 .ghost { height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--fg2); }
 .link { background: transparent; border: 0; color: var(--accent); font-size: 12px; padding: 2px 0; }
+.idle-box .link { font: inherit; padding: 0; cursor: pointer; }
 
 /* ---------- control bar ---------- */
 .pill { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; background: var(--surface); border: 1px solid var(--hover); border-radius: 22px; padding: 6px; transition: opacity .25s; z-index: 10; }
@@ -219,6 +220,14 @@ body[data-style="keyboard"] .toast, body[data-style="keyboard"] .toast button { 
 .aan .icon { width: 16px; height: 16px; }
 body[data-style="keyboard"] .aan { top: 40px; border-radius: 4px; }
 body.idle-hide .aan { opacity: .35; }
+/* Settings gear: top right on every screen; moves left of the chat panel. */
+.gear { position: fixed; top: 16px; right: 16px; width: 34px; height: 34px; border: 0; border-radius: 10px; background: var(--surface); color: var(--dim); display: flex; align-items: center; justify-content: center; z-index: 10; transition: opacity .25s; }
+.gear:hover { color: var(--fg); background: var(--hover); }
+.gear .icon { width: 17px; height: 17px; }
+body.panel-open .gear { right: 384px; }
+body[data-style="keyboard"] .gear { top: 40px; border-radius: 4px; }
+body.idle-hide .gear { opacity: .35; }
+body.in-waiting .gear { display: none; }
 .people .rename { flex: 1; min-width: 0; display: flex; gap: 6px; }
 .people .rename input { flex: 1; min-width: 0; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font: inherit; }
 .people .link.small { font-size: 12px; }

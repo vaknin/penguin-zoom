@@ -11,12 +11,18 @@
 <!-- Zoom's own rendering (component view). Our UI floats around it. -->
 <div id="zoomRoot" aria-label="Meeting video"></div>
 
+<!-- Settings, reachable on every screen (also the , key). -->
+<button id="gear" class="gear" data-action="settings" aria-label="Settings" title="Settings (,)">
+  <svg class="icon" data-icon="gear" aria-hidden="true"></svg>
+</button>
+
 <!-- ============ No link yet ============ -->
 <section id="idle" class="screen">
   <div class="idle-box">
     <svg class="icon big" data-icon="video" aria-hidden="true"></svg>
     <h1>Open a Zoom link to join</h1>
     <p class="dim">Click a meeting link anywhere and it opens here. You can also paste one with <kbd>Ctrl</kbd> <kbd>V</kbd>.</p>
+    <p class="dim">Sign in and other options are in <button class="link" data-action="settings">Settings</button> (the gear at the top right, or <kbd>,</kbd>).</p>
   </div>
 </section>
 

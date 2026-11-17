@@ -4,7 +4,7 @@
 
 **Zoom meetings in a light Linux window.**
 
-<img src="docs/screenshot.png" width="549" alt="The meeting window: the control bar with Unmute, Start video, Share, Chat, Speaker, Devices and Leave, and the chat panel open on the right">
+<img src="docs/screenshot.png" width="640" alt="A meeting with two participants, cameras off: the control bar with Unmute, Start video, Share, Chat, Speaker, Devices and Leave at the bottom, and the chat panel open on the right">
 
 Click a Zoom link and it opens in a small native window.<br>
 It tiles on Hyprland like any other window,<br>
@@ -21,7 +21,7 @@ Paste this into your AI coding agent (Claude Code, Codex, Cursor…):
 
 ```text
 Install Penguin for Zoom on this Arch Linux machine by following
-https://raw.githubusercontent.com/vaknin/penguin-zoom/main/AGENT-INSTALL.md
+https://raw.githubusercontent.com/vaknin/penguin-zoom/master/AGENT-INSTALL.md
 Ask me before any command that needs sudo.
 ```
 

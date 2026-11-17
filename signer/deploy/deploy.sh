@@ -84,7 +84,9 @@ sudo rsync -a --delete --chown=root:root --chmod=D0755,F0644 "$HOME/penguin-site
 
 # Caddy: our own file, imported from the main Caddyfile (other sites kept).
 sudo install -m 0644 -o root -g root deploy/penguin.caddy /etc/caddy/penguin.caddy
-printf 'PENGUIN_HOSTS=%s\n' "$PENGUIN_HOSTS" | sudo install -m 0644 -o root -g root /dev/stdin /etc/caddy/penguin.env
+# sudo tee, not `install` from stdin: that fails over SSH on Ubuntu.
+printf 'PENGUIN_HOSTS=%s\n' "$PENGUIN_HOSTS" | sudo tee /etc/caddy/penguin.env >/dev/null
+sudo chmod 0644 /etc/caddy/penguin.env
 if [[ ! -f /etc/caddy/Caddyfile ]]; then
   sudo install -m 0644 -o root -g root deploy/Caddyfile.main /etc/caddy/Caddyfile
 elif ! sudo grep -qE '^[[:space:]]*import[[:space:]]+(/etc/caddy/)?penguin\.caddy' /etc/caddy/Caddyfile; then
@@ -98,7 +100,7 @@ elif ! sudo grep -qE '^[[:space:]]*import[[:space:]]+(/etc/caddy/)?penguin\.cadd
 fi
 sudo install -d -m 0755 /etc/systemd/system/caddy.service.d
 printf '[Service]\nEnvironmentFile=/etc/caddy/penguin.env\n' |
-  sudo install -m 0644 -o root -g root /dev/stdin /etc/systemd/system/caddy.service.d/penguin.conf
+  sudo tee /etc/systemd/system/caddy.service.d/penguin.conf >/dev/null
 
 # Firewall (idempotent).
 sudo bash deploy/open-web-ports.sh

@@ -772,10 +772,7 @@ async function start() {
   S.joinMic = !S.settings.joinMuted;
   S.joinCam = !S.settings.joinCameraOff;
   applyStyle();
-  try {
-    const st = await api('/api/status');
-    S.account = { signedIn: !!st.signedIn, user: st.user || null, configured: !!st.publicClientConfigured };
-  } catch {}
+  await refreshAccount();
   let launch = null;
   try { launch = await api('/api/launch'); } catch {}
   const q = new URLSearchParams(location.search).get('m');

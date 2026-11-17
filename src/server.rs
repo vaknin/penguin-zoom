@@ -373,7 +373,11 @@ async fn client_secret() -> Result<String, String> {
 // ---------- OAuth (public client, PKCE) ----------
 
 /// The Marketplace app's public (PKCE) client ID. Not secret.
-const PUBLIC_CLIENT_ID: &str = "A5tAVufnR9KL896jTgthpA";
+/// Development client: an unpublished app can only sign in with its
+/// Development credentials. Switch to the Production one,
+/// `A5tAVufnR9KL896jTgthpA`, when Zoom approves the app (and move the signer to
+/// the Production SDK key and secret at the same time).
+const PUBLIC_CLIENT_ID: &str = "I7gQRtV3QNK0b48jBgUE0Q";
 
 /// `ZOOM_PUBLIC_CLIENT_ID` overrides the built-in ID (e.g. for a second app).
 fn public_client_id() -> Option<String> {

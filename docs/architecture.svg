@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" font-family="DejaVu Sans, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .box{fill:#fff;stroke:#334155;stroke-width:2;rx:10}
+      .zone{fill:#f1f5f9;stroke:#94a3b8;stroke-width:2;stroke-dasharray:8 6}
+      .t{font-size:22px;font-weight:700;fill:#0f172a}
+      .s{font-size:17px;fill:#334155}
+      .z{font-size:20px;font-weight:700;fill:#475569}
+      .l{font-size:16px;fill:#0f172a}
+      .ln{stroke:#334155;stroke-width:2.2;fill:none;marker-end:url(#a)}
+    </style>
+  </defs>
+  <rect width="1600" height="1000" fill="#ffffff"/>
+  <text x="40" y="52" font-size="30" font-weight="700" fill="#0f172a">Penguin for Zoom: architecture</text>
+
+  <!-- User's computer -->
+  <rect class="zone" x="40" y="90" width="700" height="860" rx="16"/>
+  <text class="z" x="64" y="126">User's Linux computer</text>
+
+  <rect class="box" x="70" y="150" width="640" height="300"/>
+  <text class="t" x="94" y="186">Penguin for Zoom (desktop app, Rust)</text>
+  <text class="s" x="94" y="216">Native window: tao + wry, WebKitGTK 4.1 web view</text>
+  <rect class="box" x="94" y="236" width="592" height="92"/>
+  <text class="t" x="114" y="268" font-size="19">Zoom Meeting SDK for Web 6.10 (component view)</text>
+  <text class="s" x="114" y="296">loaded unchanged from the app's installed files;</text>
+  <text class="s" x="114" y="318">app interface in HTML/CSS/JS around it</text>
+  <rect class="box" x="94" y="344" width="592" height="88"/>
+  <text class="t" x="114" y="376" font-size="19">Local server: 127.0.0.1:53682 only</text>
+  <text class="s" x="114" y="402">serves the app UI to its own window, OAuth loopback</text>
+  <text class="s" x="114" y="424">redirect (PKCE), Host/Origin checks</text>
+
+  <rect class="box" x="70" y="500" width="640" height="120"/>
+  <text class="t" x="94" y="536">OS keyring (Secret Service)</text>
+  <text class="s" x="94" y="566">OAuth refresh token only, encrypted at rest.</text>
+  <text class="s" x="94" y="592">Access token and ZAK: app memory only.</text>
+
+  <rect class="box" x="70" y="670" width="640" height="110"/>
+  <text class="t" x="94" y="706">Camera, microphone, speakers, screen</text>
+  <text class="s" x="94" y="736">PipeWire / xdg-desktop-portal (screen share)</text>
+
+  <path class="ln" d="M600,450 L600,500"/>
+  <path class="ln" d="M710,725 L726,725 L726,430 L713,430"/><path class="ln" d="M100,500 L100,450"/>
+
+  <!-- Zoom -->
+  <rect class="zone" x="900" y="90" width="660" height="520" rx="16"/>
+  <text class="z" x="924" y="126">Zoom</text>
+  <rect class="box" x="930" y="150" width="600" height="96"/>
+  <text class="t" x="954" y="186">zoom.us OAuth (authorize, token, revoke)</text>
+  <text class="s" x="954" y="214">public client, Authorization Code + PKCE (S256)</text>
+  <rect class="box" x="930" y="270" width="600" height="96"/>
+  <text class="t" x="954" y="306">api.zoom.us</text>
+  <text class="s" x="954" y="334">GET /v2/users/me/token?type=zak (scope user:read:token)</text>
+  <rect class="box" x="930" y="390" width="600" height="96"/>
+  <text class="t" x="954" y="426">Zoom meeting service</text>
+  <text class="s" x="954" y="454">audio, video, share, chat via the Meeting SDK</text>
+  <rect class="box" x="930" y="510" width="600" height="80"/>
+  <text class="t" x="954" y="546">Marketplace webhooks</text>
+  <text class="s" x="954" y="572">app_deauthorized notification</text>
+
+  <!-- Signer -->
+  <rect class="zone" x="900" y="650" width="660" height="300" rx="16"/>
+  <text class="z" x="924" y="686">Our server (Oracle Cloud VM, Israel)</text>
+  <rect class="box" x="930" y="706" width="600" height="220"/>
+  <text class="t" x="954" y="742">penguin.kitah.co.il</text>
+  <text class="s" x="954" y="772">Caddy: HTTPS (Let's Encrypt, TLS 1.2+), HSTS, 4 KB bodies</text>
+  <text class="s" x="954" y="800">penguin-signer (Rust): POST /v1/signature signs the</text>
+  <text class="s" x="954" y="824">Meeting SDK JWT with the SDK secret (server only);</text>
+  <text class="s" x="954" y="848">role 1 only after checking the user's token with Zoom.</text>
+  <text class="s" x="954" y="872">POST /v1/zoom-webhook: x-zm-signature verified.</text>
+  <text class="s" x="954" y="900">No database, no logs of IPs or tokens. Public pages.</text>
+
+  <!-- flows -->
+  <path class="ln" d="M710,250 L930,198"/>
+  <text class="l" x="742" y="208">1 sign-in (HTTPS)</text>
+  <path class="ln" d="M710,300 L930,318"/>
+  <text class="l" x="742" y="296">2 ZAK before join</text>
+  <path class="ln" d="M710,410 C800,700 840,780 930,800"/>
+  <text class="l" x="772" y="540">3 signature</text>
+  <text class="l" x="772" y="560">request</text>
+  <path class="ln" d="M700,330 L930,438"/>
+  <text class="l" x="800" y="356">4 join + media</text>
+  <path class="ln" d="M1230,590 L1230,706"/>
+  <text class="l" x="1036" y="634">deauthorization (HTTPS)</text>
+  <path class="ln" d="M1530,800 C1590,700 1590,360 1530,318"/>
+  <text class="l" x="1400" y="634">token check (role 1)</text>
+</svg>

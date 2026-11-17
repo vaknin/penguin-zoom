@@ -301,8 +301,14 @@ def start():
     if in_meeting(s) or s.has(r"^Back to meeting"):
         log("already in a meeting")
         return
-    tap(r"^Meet$|^New meeting|^Start a meeting", 4, required=False)
-    tap(r"^Start$|^Start a meeting$|^Start meeting$", 6)
+    tap(r"^Meet, button$|^Meet$|^New meeting|^Start a meeting", 4, required=False)
+    # Zoom 2026-11: "Meet" opens a sheet whose title and button both say "Start
+    # a meeting"; the title comes first in the dump, so tap the button by id.
+    _, xy = until(lambda s: s.id("btnStartMeeting")[1], 6)[1].id("btnStartMeeting")
+    if xy:
+        click(*xy)
+    else:
+        tap(r"^Start$|^Start a meeting$|^Start meeting$", 6)
     # Zoom (2026-11) may show a camera/mic preview with its own Start button
     # ("Always show this preview when joining"); press that one too.
     _, s = until(lambda s: s.id(AUDIO)[0] is not None or s.has(COOLDOWN) or s.has(PREVIEW), 20)

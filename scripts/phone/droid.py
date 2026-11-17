@@ -57,6 +57,20 @@ def fail(msg):
     raise Fail(msg)
 
 
+def pick_serial():
+    """One phone often shows up twice (the mDNS `adb-…._adb-tls-connect._tcp` entry and
+    `ip:port`); uiautomator2 refuses to choose. Prefer USB, then ip:port, then the rest."""
+    out = subprocess.run(["adb", "devices"], capture_output=True, text=True).stdout.splitlines()[1:]
+    devs = [l.split()[0] for l in out if l.strip().endswith("\tdevice") and not l.startswith("emulator-")]
+    if not devs:
+        return None
+    usb = [x for x in devs if ":" not in x and "._tcp" not in x]
+    ipp = [x for x in devs if re.match(r"^\d+\.\d+\.\d+\.\d+:\d+$", x)]
+    serial = (usb or ipp or devs)[0]
+    os.environ["ANDROID_SERIAL"] = serial  # adb calls made by droid itself use it too
+    return serial
+
+
 class Dev:
     """The uiautomator2 device: connected once, reconnected after an error."""
     def __init__(self):
@@ -67,7 +81,7 @@ class Dev:
 
     def __getattr__(self, name):
         if self._d is None:
-            self._d = u2.connect(os.environ.get("ANDROID_SERIAL"))
+            self._d = u2.connect(os.environ.get("ANDROID_SERIAL") or pick_serial())
         return getattr(self._d, name)
 
 

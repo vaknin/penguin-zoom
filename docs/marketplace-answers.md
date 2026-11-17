@@ -51,6 +51,24 @@ Components:
 
 Scopes: user:read:token only.
 
+## Technical design: Technology stack
+
+Desktop app (runs on the user's Linux computer):
+- Rust 1.100. Window: tao 0.37 and wry 0.57 over the system WebKitGTK 4.1 (GTK 3) web view.
+- Zoom Meeting SDK for Web 6.10.0, component view (ZoomMtgEmbedded), installed with the app from npm (@zoom/meetingsdk) and loaded from local files, unchanged.
+- App interface: plain HTML, CSS and JavaScript (no framework); a small wrapper calls the SDK's public API (join, mute, leave, chat, breakout rooms, video options).
+- Local HTTP server: tokio and axum 0.8, bound to 127.0.0.1:53682 only.
+- HTTP client: reqwest 0.13 (rustls/HTTPS) for Zoom OAuth (authorize, token, revoke) and the Zoom REST API (GET /v2/users/me/token?type=zak), and for our signing service.
+- OAuth 2.0 Authorization Code with PKCE (S256), public client; hmac/sha2/base64 crates for PKCE.
+- Token storage: the OS keyring through the Secret Service API (libsecret's secret-tool), refresh token only.
+- Media: WebKitGTK media capture with GStreamer 1.28 and PipeWire; screen sharing through xdg-desktop-portal (ScreenCast) with ashpd and GStreamer.
+- Packaging: Arch Linux package (PKGBUILD).
+
+Signing service (https://penguin.kitah.co.il):
+- Rust, tokio, axum, hmac/sha2 for the Meeting SDK JWT (HS256) and webhook signature checks (x-zm-signature).
+- Caddy 2 in front (HTTPS with Let's Encrypt certificates, TLS 1.2+, HSTS), systemd service with a hardened unit, Ubuntu 26.04 on an Oracle Cloud VM.
+- Zoom APIs used: Meeting SDK signature (JWT), GET /v2/users/me/token?type=zak with the user's own access token (only to confirm the user is signed in before a host signature; nothing is kept), Marketplace webhook (app_deauthorized).
+
 ## Technical design: Security overview
 
 - Secrets: the SDK client secret exists only on the signing server, in a root-only (mode 600) environment file. It is never shipped in the app, logged or sent to clients.
@@ -60,6 +78,18 @@ Scopes: user:read:token only.
 - Signing service: HTTPS only (TLS certificates from Let's Encrypt, HSTS), request bodies limited to 4 KB, timeouts on all connections, rate limiting per client IP held in memory only, no access logs, no database, no stored IP addresses or tokens. Host (role 1) signatures require a valid Zoom access token, checked with Zoom; only a one-way hash is cached in memory for a few minutes. The service runs as an unprivileged system user under a hardened systemd unit. The server accepts SSH with keys only and has automatic security updates and fail2ban.
 - Webhooks: deauthorization notifications are verified with Zoom's signature (x-zm-signature, HMAC-SHA256 with the app's secret token) and the URL validation challenge.
 - Data: no analytics, telemetry or tracking. No meeting content or personal data passes through or is stored on our servers; meeting media goes directly between the app and Zoom.
+
+## Technical design: Security answers
+
+- TLS 1.2 or above for all network traffic: Yes (Zoom endpoints over HTTPS; our server is Caddy with TLS 1.2+ only; the app's own server listens on 127.0.0.1 only).
+- x-zm-signature on webhooks: Yes.
+- Collects/stores Zoom user data incl. OAuth tokens: Yes. At rest:
+
+Only the user's Zoom OAuth refresh token is kept after the app closes, and only on the user's own computer: it is stored in the operating system's keyring through the Secret Service API (for example GNOME Keyring), which encrypts it at rest and releases it only to the user's unlocked session. It is never written to a plain file or a log, never sent to our servers, replaced on every refresh, and deleted on sign-out or when Zoom rejects it. The access token and the ZAK are held in the app's memory only and are gone when the app closes. Our signing service stores no Zoom user data: it has no database and keeps no logs of tokens or IP addresses; for host signatures it keeps only a SHA-256 hash of the access token in memory for a few minutes.
+
+## Technical design: Application development
+
+- SSDLC: No. SAST/DAST: No. Third-party penetration testing: No. ("Yes" requires evidence documents.)
 
 ## EU & discoverability (owner only)
 

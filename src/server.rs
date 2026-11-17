@@ -52,7 +52,17 @@ use crate::{launch::Launch, settings::Settings, speakers};
 
 pub const ADDR: &str = "127.0.0.1:53682";
 pub const ORIGIN: &str = "http://127.0.0.1:53682";
-const REDIRECT_URI: &str = "http://127.0.0.1:53682/oauth/callback";
+/// The OAuth redirect Zoom sends the browser to after sign-in. Zoom's authorize
+/// page refuses loopback redirects for this app (tested 2026-11-17: "Invalid
+/// redirect URL" for http://127.0.0.1:53682/…, consent page for this one), so
+/// it is an https page on our site that hands `?code=…&state=…` straight on to
+/// /oauth/callback here (site/oauth/bounce.js). The same value goes into the
+/// token exchange, as Zoom requires. `PENGUIN_REDIRECT_URI` overrides it.
+const REDIRECT_URI_DEFAULT: &str = "https://penguin.kitah.co.il/oauth/callback";
+
+fn redirect_uri() -> String {
+    std::env::var("PENGUIN_REDIRECT_URI").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| REDIRECT_URI_DEFAULT.into())
+}
 /// Confidential client ID (not secret). Goes into the SDK signature as `appKey`.
 const SDK_CLIENT_ID: &str = "QIyq0AOWRRCCEFesq_s52w";
 
@@ -437,7 +447,7 @@ async fn authorize_url(s: &AppState) -> Option<String> {
     u.query_pairs_mut()
         .append_pair("response_type", "code")
         .append_pair("client_id", &client_id)
-        .append_pair("redirect_uri", REDIRECT_URI)
+        .append_pair("redirect_uri", &redirect_uri())
         .append_pair("code_challenge", &challenge)
         .append_pair("code_challenge_method", "S256")
         .append_pair("state", &st);
@@ -490,6 +500,7 @@ async fn oauth_callback(
         return browser_page(false, "this sign-in link expired or was already used");
     };
     let client_id = public_client_id().unwrap_or_default();
+    let redirect = redirect_uri();
     // Public client: client_id in the form body, no Authorization header.
     let res = s
         .http
@@ -498,7 +509,7 @@ async fn oauth_callback(
             ("grant_type", "authorization_code"),
             ("code", code.as_str()),
             ("client_id", client_id.as_str()),
-            ("redirect_uri", REDIRECT_URI),
+            ("redirect_uri", redirect.as_str()),
             ("code_verifier", verifier.as_str()),
         ])
         .send()

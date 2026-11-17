@@ -9,3 +9,6 @@ __pycache__/
 *.key
 *.p12
 .DS_Store
+/packaging/pkg/
+/packaging/src/
+/packaging/*.pkg.tar.*

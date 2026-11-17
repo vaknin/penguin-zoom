@@ -99,6 +99,16 @@ body.panel-open .pill { left: calc((100vw - 366px) / 2); }
 .pill .dot { position: absolute; top: 12px; right: 22px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 body.idle-hide .pill, body.idle-hide .toast.room { opacity: 0; pointer-events: none; }
 
+/* ---------- waiting room ---------- */
+.waiting { display: none; position: fixed; inset: 0 0 var(--bar-h) 0; align-items: center; justify-content: center; }
+body.in-waiting .waiting { display: flex; }
+body.in-waiting #zoomRoot { visibility: hidden; }
+body.in-waiting .pill > :not(.leave), body.in-waiting .aan, body.in-waiting .kb-flags { display: none; }
+body.in-waiting.idle-hide .pill { opacity: 1; pointer-events: auto; }
+.spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
 /* ---------- toast (breakout invite, room chip, errors) ---------- */
 .toast { position: fixed; top: 22px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; background: var(--raised); border: 1px solid var(--line); border-radius: 999px; padding: 6px 6px 6px 18px; box-shadow: 0 10px 30px rgba(0,0,0,.4); z-index: 20; transition: opacity .25s; max-width: calc(100vw - 32px); }
 body.panel-open .toast { left: calc((100vw - 366px) / 2); }

@@ -69,17 +69,23 @@ if (!('orientation' in screen) || !screen.orientation) {
 // The camera/mic the user picked, applied to every capture (Zoom's own menus
 // only exist while video/audio is on). With no pick, requests go through
 // unchanged: every device stays available and nothing is chosen for the user.
-window.__zcDev = { camera: null, mic: null }; // chosen device labels
+window.__zcDev = { camera: null, mic: null, cameraId: null, micId: null }; // chosen device labels and ids
 {
   const gum = MediaDevices.prototype.getUserMedia;
-  const resolve = async (c, kind, want) => {
-    if (!c) return c;
+  const resolve = async (c, kind, want, wantId) => {
+    if (!c || !(want || wantId)) return c;
     const devs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === kind && d.deviceId && d.deviceId !== 'default');
-    if (!devs.length || !devs[0].label) return c; // no labels before the first grant
     const o = typeof c === 'object' ? { ...c } : {};
+    // Before the first grant WebKit hides ids and labels, but a saved id still
+    // opens its device, so the default one is never opened in its place.
+    if (!devs.length || !devs[0].label) {
+      if (!wantId) return c;
+      o.deviceId = { exact: wantId };
+      return o;
+    }
     const askedId = o.deviceId?.exact ?? o.deviceId?.ideal ?? o.deviceId;
     const asked = devs.find((d) => d.deviceId === askedId);
-    const use = want ? devs.find((d) => d.label === want) : null;
+    const use = devs.find((d) => d.deviceId === wantId) || devs.find((d) => d.label === want);
     if (!use || use === asked) return c;
     o.deviceId = { exact: use.deviceId };
     return o;
@@ -90,11 +96,17 @@ window.__zcDev = { camera: null, mic: null }; // chosen device labels
   MediaDevices.prototype.getUserMedia = async function (c = {}) {
     const asked = c;
     try {
-      c = { ...c, video: await resolve(c.video, 'videoinput', window.__zcDev.camera),
-            audio: await resolve(c.audio, 'audioinput', window.__zcDev.mic) };
+      c = { ...c, video: await resolve(c.video, 'videoinput', window.__zcDev.camera, window.__zcDev.cameraId),
+            audio: await resolve(c.audio, 'audioinput', window.__zcDev.mic, window.__zcDev.micId) };
     } catch { /* keep the request as it was */ }
     try {
-      const st = await gum.call(this, c);
+      let st;
+      try { st = await gum.call(this, c); } catch (e) {
+        // The chosen device is gone (unplugged): fall back to what was asked.
+        if ((c.video === asked.video && c.audio === asked.audio) || !/Overconstrained|NotFound/.test(e.name)) throw e;
+        glog('warn', `chosen device not available (${e.name}); using the request as asked`);
+        c = asked; st = await gum.call(this, c);
+      }
       const t = st.getVideoTracks()[0];
       if (t) glog('info', `camera "${t.label}" ${JSON.stringify(t.getSettings()).slice(0, 120)}${c.video !== asked.video ? ' (our choice)' : ''}`);
       return st;
@@ -346,6 +358,188 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     }
   };
 
+  // Zoom warns "Can not use the hardware acceleration for video encoding due
+  // to the account restriction" in some joins; noted in the log only (PLAN.md
+  // §5.6: it is not why the camera failed, and nothing can be done from here).
+  {
+    const warn = console.warn;
+    console.warn = function (...a) {
+      if (typeof a[0] === 'string' && a[0].includes('hardware acceleration for video encoding due to the account restriction')) log('info', 'glue: saw the hardware encoding refusal');
+      return warn.apply(this, a);
+    };
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // ---- share frames: skip WebKit's <video> frame copy ----
+  // WebKitWebProcess segfaulted on the main thread ~1 s into our share (about
+  // 1 share start in 4, 2026-11-17): a memcpy of exactly 1920x1080x4 bytes
+  // that ran off the end of a smaller buffer, called from JS. Zoom reads our
+  // share by drawing a <video> that plays our canvas track (screencast.js)
+  // into its own 2D canvas, then getImageData of the full frame. Hand Zoom's
+  // drawImage our canvas itself instead: same pixels, and WebKit never copies
+  // out of the video element's current sample. ?novideodetour turns it off.
+  if (!location.search.includes('novideodetour')) {
+    const draw = CanvasRenderingContext2D.prototype.drawImage;
+    let noted = false;
+    CanvasRenderingContext2D.prototype.drawImage = function (src, ...a) {
+      if (src instanceof HTMLVideoElement) {
+        const tr = src.srcObject?.getVideoTracks?.()[0];
+        if (tr?.canvas instanceof HTMLCanvasElement && tr.readyState === 'live') {
+          if (!noted) { noted = true; log('info', `glue: share frames drawn from our canvas (${tr.canvas.width}x${tr.canvas.height}), not the <video>`); }
+          src = tr.canvas;
+        }
+      }
+      return draw.call(this, src, ...a);
+    };
+  }
+
+  // Send-quality investigation (?vidstats): every 5 s, how often the page's
+  // main thread copies frames (per API and source), the animation-frame rate,
+  // and what each <video> playing a live track has decoded.
+  if (location.search.includes('vidstats')) {
+    const n = {};
+    const kind = (s) => {
+      if (!s || typeof s !== 'object') return typeof s;
+      const c = s.constructor?.name || 'obj';
+      if (s instanceof HTMLVideoElement) return `video${s.videoWidth}x${s.videoHeight}`;
+      return `${c}${s.width ?? s.displayWidth ?? ''}x${s.height ?? s.displayHeight ?? ''}`;
+    };
+    const hit = (k) => { n[k] = (n[k] || 0) + 1; };
+    const wrapN = (proto, name, pick) => {
+      const f = proto?.[name];
+      if (!f) return;
+      proto[name] = function (...a) { try { hit(`${name}(${kind(pick(a))})`); } catch {} return f.apply(this, a); };
+    };
+    wrapN(CanvasRenderingContext2D.prototype, 'drawImage', (a) => a[0]);
+    wrapN(window.OffscreenCanvasRenderingContext2D?.prototype, 'drawImage', (a) => a[0]);
+    wrapN(CanvasRenderingContext2D.prototype, 'getImageData', (a) => ({ width: a[2], height: a[3], constructor: { name: 'rect' } }));
+    for (const P of [window.WebGLRenderingContext?.prototype, window.WebGL2RenderingContext?.prototype]) {
+      wrapN(P, 'texImage2D', (a) => a[a.length - 1]);
+      wrapN(P, 'texSubImage2D', (a) => a[a.length - 1]);
+    }
+    wrapN(window.VideoEncoder?.prototype, 'encode', (a) => a[0]);
+    wrapN(window.VideoEncoder?.prototype, 'configure', (a) => a[0]);
+    wrapN(Worker.prototype, 'postMessage', (a) => (a[1] && a[1].length ? a[1][0] : a[0]?.constructor && { constructor: { name: 'msg' } }));
+    if (window.VideoFrame) {
+      const VF = window.VideoFrame;
+      window.VideoFrame = new Proxy(VF, { construct(t, a) { try { hit(`new VideoFrame(${kind(a[0])})`); } catch {} return new t(...a); } });
+    }
+    const cib = window.createImageBitmap;
+    window.createImageBitmap = function (...a) { try { hit(`createImageBitmap(${kind(a[0])})`); } catch {} return cib.apply(this, a); };
+    let raf = 0;
+    const tick = () => { raf++; requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+    const last = new WeakMap();
+    setInterval(() => {
+      const vids = [...document.querySelectorAll('video')].filter((v) => v.srcObject).map((v) => {
+        const tot = v.getVideoPlaybackQuality?.().totalVideoFrames ?? v.webkitDecodedFrameCount ?? 0;
+        const d = tot - (last.get(v) || 0); last.set(v, tot);
+        const t = v.srcObject.getVideoTracks?.()[0];
+        return `${v.videoWidth}x${v.videoHeight}:${(d / 5).toFixed(0)}fps${v.paused ? ':paused' : ''}${t ? ':' + t.readyState + (t.muted ? ':muted' : '') : ''}`;
+      });
+      const parts = Object.entries(n).map(([k, c]) => `${k}=${(c / 5).toFixed(1)}/s`);
+      for (const k of Object.keys(n)) delete n[k];
+      log('info', `vidstats: raf=${(raf / 5).toFixed(0)}/s ${document.visibilityState} videos[${vids.join(' ')}] ${parts.join(' ')}`.slice(0, 900));
+      raf = 0;
+    }, 5000);
+  }
+
+  // Send-quality investigation (?workerstats): Zoom encodes in workers, which
+  // ?vidstats can't see. Start each classic worker with a prelude that counts,
+  // per 5 s: VideoFrames received, VideoEncoder configure/encode/output (if
+  // WebCodecs is used), bytes posted out, and how late a 20 ms timer fires
+  // (a busy worker). The SDK's own script then runs unchanged.
+  if (location.search.includes('workerstats')) {
+    const OrigWorker = window.Worker;
+    let wid = 0;
+    const prelude = (id, tag) => `
+      (() => {
+        const n = {}; const hit = (k, c = 1) => { n[k] = (n[k] || 0) + c; };
+        const send = (m) => { try { fetch('${location.origin}/api/log', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ level: 'info', msg: 'workerstats w${id} ${tag}: ' + String(m).slice(0, 900) }) }); } catch {} };
+        self.addEventListener('message', (e) => {
+          const d = e.data; let k = 'in:' + (d && (d.command || d.cmd || d.type || d.action) !== undefined ? (d.command || d.cmd || d.type || d.action) : typeof d);
+          try { for (const v of Object.values(d || {})) if (self.VideoFrame && v instanceof VideoFrame) { k = 'in:VideoFrame ' + v.displayWidth + 'x' + v.displayHeight; break; } } catch {}
+          if (self.VideoFrame && d instanceof VideoFrame) k = 'in:VideoFrame ' + d.displayWidth + 'x' + d.displayHeight;
+          hit(k);
+        }, true);
+        if (self.VideoEncoder) {
+          const VE = self.VideoEncoder;
+          self.VideoEncoder = function (init) {
+            const out = init.output; init = { ...init, output: (c, m) => { hit('enc.out'); hit('enc.bytes', c.byteLength); return out(c, m); } };
+            const e = new VE(init);
+            const conf = e.configure.bind(e); e.configure = (c) => { send('VideoEncoder.configure ' + JSON.stringify(c)); return conf(c); };
+            const enc = e.encode.bind(e); e.encode = (f, o) => { hit('enc.in'); return enc(f, o); };
+            return e;
+          };
+          self.VideoEncoder.isConfigSupported = VE.isConfigSupported.bind(VE);
+        }
+        const pm = self.postMessage.bind(self);
+        self.postMessage = (m, ...r) => { try { const b = m && (m.byteLength || (m.data && m.data.byteLength) || (m.buffer && m.buffer.byteLength)); hit('out'); if (b) hit('out.bytes', b); } catch {} return pm(m, ...r); };
+        let last = performance.now(), late = 0, worst = 0;
+        setInterval(() => { const t = performance.now(), d = t - last - 20; last = t; if (d > 5) { late += d; if (d > worst) worst = d; } }, 20);
+        setInterval(() => {
+          const parts = Object.entries(n).map(([k, c]) => k + '=' + (c / 5).toFixed(1) + '/s'); for (const k of Object.keys(n)) delete n[k];
+          if (parts.length) send(parts.join(' ') + ' busy=' + (late / 50).toFixed(0) + '% worstLag=' + worst.toFixed(0) + 'ms');
+          late = 0; worst = 0;
+        }, 5000);
+      })();
+    `;
+    window.Worker = function (url, opts) {
+      const u = String(url);
+      if (opts && opts.type === 'module') return new OrigWorker(url, opts);
+      const abs = new URL(u, location.href).href;
+      let body = `\nimportScripts(${JSON.stringify(abs)});\n`, tag = abs.split('/').pop().slice(0, 40);
+      if (abs.startsWith('blob:')) {
+        try { const x = new XMLHttpRequest(); x.open('GET', abs, false); x.send(); body = '\n' + x.responseText; tag = 'blob ' + (x.responseText.match(/[\w.-]+\.min\.js|importScripts\(["'][^"']+/)?.[0] || '').slice(-40); }
+        catch { return new OrigWorker(url, opts); }
+      }
+      const id = ++wid;
+      log('info', `workerstats: worker w${id} ${tag} name=${opts?.name || ''} bytes=${body.length}`);
+      return new OrigWorker(URL.createObjectURL(new Blob([prelude(id, tag.replace(/[`$\\']/g, '')) + body], { type: 'text/javascript' })), opts);
+    };
+    window.Worker.prototype = OrigWorker.prototype;
+  }
+
+  // Crash investigation: log (synchronously, so it lands before a crash) the
+  // first call of each frame-copying API per source kind and size. ?copylog
+  if (location.search.includes('copylog')) {
+    const seenC = new Set();
+    const desc = (s) => {
+      if (!s || typeof s !== 'object') return typeof s;
+      const n = s.constructor?.name || 'obj';
+      if (s instanceof HTMLVideoElement) return `${n} ${s.videoWidth}x${s.videoHeight} ${s.srcObject?.getVideoTracks?.()[0]?.constructor?.name || ''}`;
+      if (s.width !== undefined) return `${n} ${s.width}x${s.height}`;
+      if (s.displayWidth !== undefined) return `${n} ${s.displayWidth}x${s.displayHeight}`;
+      return n;
+    };
+    const note = (api, a) => {
+      const k = api + ' ' + a.map(desc).join(', ');
+      if (seenC.has(k)) return;
+      seenC.add(k);
+      try {
+        const x = new XMLHttpRequest();
+        x.open('POST', '/api/log', false);
+        x.setRequestHeader('content-type', 'application/json');
+        x.send(JSON.stringify({ level: 'info', msg: 'copylog: ' + k.slice(0, 220) }));
+      } catch {}
+    };
+    const wrap = (proto, name, pick) => {
+      const f = proto?.[name];
+      if (!f) return;
+      proto[name] = function (...a) { note(`${proto.constructor.name}.${name}`, pick(a)); return f.apply(this, a); };
+    };
+    wrap(CanvasRenderingContext2D.prototype, 'drawImage', (a) => [a[0]]);
+    wrap(CanvasRenderingContext2D.prototype, 'getImageData', (a) => [{ width: a[2], height: a[3], constructor: { name: 'rect' } }]);
+    for (const P of [window.WebGLRenderingContext?.prototype, window.WebGL2RenderingContext?.prototype]) {
+      wrap(P, 'texImage2D', (a) => [a[a.length - 1]]);
+      wrap(P, 'texSubImage2D', (a) => [a[a.length - 1]]);
+      wrap(P, 'readPixels', (a) => [{ width: a[2], height: a[3], constructor: { name: 'rect' } }]);
+    }
+    const cib = window.createImageBitmap;
+    window.createImageBitmap = function (...a) { note('createImageBitmap', [a[0]]); return cib.apply(this, a); };
+  }
+
   // ---- join / meeting ----
   async function init(rootEl, onEvent) {
     root = rootEl;
@@ -416,22 +610,70 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
       const zr = await fetch('/api/zak');
       if (zr.ok) opts.zak = (await zr.json()).zak;
     }
-    await client.join(opts);
+    try {
+      await client.join(opts);
+      log('info', 'glue: join resolved');
+    } catch (e) {
+      // Being admitted from the waiting room makes Zoom reconnect, and when
+      // that lands while join() is still pending the SDK rejects it with
+      // RECONNECTING_MEETING although the join goes on and succeeds (live
+      // tests 2026-11-17: 2 of 7 joins). Without this the steps below never
+      // ran: no audio, no camera, and a "Could not join" error on a join
+      // that worked.
+      if (!e || e.reason !== 'RECONNECTING_MEETING') throw e;
+      log('info', 'glue: join() rejected while Zoom reconnects; waiting for the meeting');
+      let inMeeting = false;
+      for (let i = 0; i < 120 && !inMeeting; i++) { await sleep(500); inMeeting = !!client.getCurrentMeetingInfo()?.isInMeeting; }
+      if (!inMeeting) throw e;
+      log('info', 'glue: joined after the reconnect');
+    }
+    snapshot(); // the UI knows at once whether we are in or in the waiting room
     fit();
+    // In a waiting room join() resolves before the host lets us in. The steps
+    // below give up after 10-30 s, so a longer wait left us with no audio
+    // (live test 2026-11-17, 20 s wait): hold them until we are really in.
+    // isInMeeting alone is not enough: it is true for a moment before Zoom
+    // puts us on hold. We are in once the participant list has us in it.
+    const mine = ++joinSeq;
+    const reallyIn = () => {
+      try { return !!client.getCurrentMeetingInfo()?.isInMeeting && !!client.getCurrentUser() && (client.getAttendeeslist() || []).length > 0; }
+      catch (e) { return false; }
+    };
+    for (let ok = 0; ok < 2;) {
+      await sleep(300);
+      if (mine !== joinSeq) return; // left, or closed, while waiting
+      ok = reallyIn() ? ok + 1 : 0;
+    }
+    log('info', 'glue: in the meeting');
     const audioOn = () => !!client.getCurrentUser()?.audio;
     const applyMute = () => { if (o.muted) Promise.resolve(client.mute(true)).catch(() => {}); };
     applyMute(); // in case the SDK connected audio by itself
     // Connect computer audio (unless the SDK already did), then mute again
     // the moment audio is up, so "join muted" never leaves the mic live.
+    // Zoom's own event comes first (a live test showed the mic open for one
+    // 2-second state line when only the timer below did this); the timer
+    // stays as the fallback.
+    // It must stop afterwards, or it would undo the user's own unmute.
+    let guardMute = !!o.muted;
+    const end = () => { guardMute = false; client.off?.('user-updated', onUser); };
+    const onUser = () => {
+      if (!guardMute || !audioOn()) return;
+      if (client.getCurrentUser()?.muted) end(); else applyMute(); // muted with audio up: done
+    };
+    if (o.muted) {
+      client.on('user-updated', onUser);
+      muteGuardEnd = end;
+      joinTimers.push(setTimeout(end, 20000));
+    }
     let tries = 0;
     const at = setInterval(() => {
       tries++;
       if (audioOn()) { clearInterval(at); applyMute(); return; }
-      if (tries > 20) { clearInterval(at); return; }
+      if (tries > 100) { clearInterval(at); return; }
       // Look quietly; press() would log a warning on every miss.
       const b = findButton(/^join audio$/i, /computer audio/i, /^audio$/i);
-      if (b && tries % 3 === 1) b.click();
-    }, 500);
+      if (b && tries % 15 === 1) b.click();
+    }, 100);
     joinTimers.push(at);
     // Zoom's "Start Video" appears a few seconds after join: keep looking (quietly)
     // until it is there, then press it once.
@@ -445,17 +687,21 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     }
   }
   const joinTimers = [];
-  function stopJoinTimers() { while (joinTimers.length) { const t = joinTimers.pop(); clearInterval(t); clearTimeout(t); } }
+  let muteGuardEnd = null; // ends the join-muted watch (the user unmuted, or we left)
+  let joinSeq = 0; // changes when a join is abandoned
+  function stopJoinTimers() { joinSeq++; muteGuardEnd?.(); muteGuardEnd = null; stopTimers(); }
+  function stopTimers() { while (joinTimers.length) { const t = joinTimers.pop(); clearInterval(t); clearTimeout(t); } }
 
   window.zc = {
     init,
     join: (j) => join(j).catch((e) => {
       const msg = e.reason || e.message || String(e);
+      log('warn', 'glue: join failed: ' + msg + ' ' + JSON.stringify(e).slice(0, 300));
       send({ type: 'error', msg: 'Could not join: ' + msg + (e.errorCode ? ` (${e.errorCode})` : '') });
       throw e;
     }),
     leave: () => { stopJoinTimers(); return guard('Leave', () => client.leaveMeeting())(); },
-    mute: guard('Mute', (m) => client.mute(m)),
+    mute: guard('Mute', (m) => { if (!m) { muteGuardEnd?.(); muteGuardEnd = null; } return client.mute(m); }),
     joinAudio: () => press(/^join audio$/i, /computer audio/i, /^audio$/i),
     // A camera without a feed (e.g. a v4l2loopback device nothing writes to)
     // makes Zoom give up on video quietly. Video then just stays off, and the
@@ -505,6 +751,7 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     // Camera: remembered for every capture (getUserMedia wrapper above); if
     // video is on, it is restarted so the new camera takes over at once.
     useCamera: async (name) => {
+      if (window.__zcDev.camera !== name) window.__zcDev.cameraId = null; // chosen by label only
       window.__zcDev.camera = name;
       const me = client?.getCurrentUser?.();
       if (me && (me.bVideoOn ?? me.video)) {
@@ -517,6 +764,7 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     // Microphone: remembered for the next capture, and switched now through
     // Zoom's audio menu when audio is connected.
     useMic: async (name) => {
+      if (window.__zcDev.mic !== name) window.__zcDev.micId = null; // chosen by label only
       window.__zcDev.mic = name;
       return findButton(/^audio setting$/i) ? chooseInZoomMenu(/^audio setting$/i, name) : true;
     },
@@ -529,5 +777,37 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     fit,
     // Live tests only: what the SDK reports and which hidden buttons exist.
     debug: () => ({ me: client.getCurrentUser(), buttons: buttons().map(label).filter(Boolean) }),
+    // Test aid: open Zoom's own Settings > Statistics > Video and return its
+    // text (what Zoom says it sends and receives). Needs video on.
+    videoStats: async () => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const ours = '#meeting, #devices, #settings, #join, #idle';
+      const vis = (sel) => [...document.querySelectorAll(sel)].filter((el) => el.offsetParent !== null && !el.closest(ours));
+      const trail = [];
+      let dlg = vis('[role=dialog]').find((d) => /statistics/i.test(d.textContent));
+      if (!dlg) {
+        if (!press(/^settings$/i)) return { error: 'no Settings button', buttons: buttons().map(label).filter(Boolean) };
+        for (let i = 0; i < 20 && !dlg; i++) { await wait(200); dlg = vis('[role=dialog]')[0]; }
+        if (!dlg) return { error: 'no dialog', trail };
+      }
+      const tabs = () => [...dlg.querySelectorAll('[role=tab], button, li')];
+      trail.push('tabs: ' + tabs().map(label).filter(Boolean).join(' | ').slice(0, 300));
+      const st = tabs().find((el) => /^statistics$/i.test(label(el)));
+      if (st) { st.click(); await wait(500); }
+      const vt = tabs().find((el) => /^video$/i.test(label(el)) && el !== st);
+      trail.push('after statistics: ' + tabs().map(label).filter(Boolean).join(' | ').slice(0, 300));
+      const vids = tabs().filter((el) => /^video$/i.test(label(el)));
+      if (vids.length) { vids[vids.length - 1].click(); await wait(1500); }
+      return { trail, text: dlg.innerText.replace(/\s+/g, ' ').slice(0, 1500) };
+    },
+    // Test aid: the boxes from Zoom's largest video/canvas up to our root.
+    layout: () => {
+      const box = (el) => { const r = el.getBoundingClientRect(); return `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}.${String(el.className?.baseVal ?? el.className).split(' ')[0].slice(0, 28)} ${Math.round(r.width)}x${Math.round(r.height)}@${Math.round(r.left)},${Math.round(r.top)}`; };
+      const area = (el) => { const r = el.getBoundingClientRect(); return r.width * r.height; };
+      const sel = 'video, canvas, video-player, video-player-container';
+      const big = [...root.querySelectorAll(sel)].filter((el) => area(el) > 0).sort((a, b) => area(b) - area(a))[0];
+      const chain = []; for (let el = big; el && el !== document.body; el = el.parentElement) chain.push(box(el));
+      return { root: box(root), all: [...document.querySelectorAll(sel)].map(box), chain };
+    },
   };
 })();

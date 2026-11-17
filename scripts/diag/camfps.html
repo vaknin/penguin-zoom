@@ -1,0 +1,49 @@
+<!doctype html><meta charset=utf-8><body style="background:#111;color:#ccc">
+<div id=slot></div><canvas id=c width=64 height=36></canvas>
+<script>
+const log = (m) => fetch('/api/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ level: 'info', msg: 'camfps: ' + m }) });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const all = {
+  visible: 'width:320px;height:180px',
+  opacity0: 'width:320px;height:180px;opacity:0',
+  current: 'position:fixed;left:0;top:0;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-1',
+  zneg: 'position:fixed;left:0;top:0;width:320px;height:180px;z-index:-1',
+  tiny: 'position:fixed;left:0;top:0;width:2px;height:2px',
+  detached: null,
+};
+(async () => {
+  try {
+    const q = new URLSearchParams(location.search);
+    const pick = (q.get('v') || Object.keys(all).join(',')).split(',');
+    const t00 = performance.now();
+    const st = await navigator.mediaDevices.getUserMedia({ video: { width: +q.get('w') || 1280, height: +q.get('h') || 720, ...(q.get('id') ? { deviceId: { exact: q.get('id') } } : {}) } }) // ?id=<device id>: a camera other than the default;
+    const s = st.getVideoTracks()[0].getSettings();
+    await log(`track ${st.getVideoTracks()[0].label} ${s.width}x${s.height}@${s.frameRate} after ${((performance.now() - t00) / 1000).toFixed(1)} s`);
+    const ctx = document.getElementById('c').getContext('2d', { willReadFrequently: true });
+    const vs = pick.map((name) => {
+      const v = document.createElement('video'); v.muted = true; v.autoplay = true; v.playsInline = true;
+      if (all[name] !== null) { v.style.cssText = all[name]; document.getElementById('slot').append(v); }
+      v.srcObject = st; v.play().catch(() => {});
+      const o = { name, v, first: 0, reads: 0, distinct: 0, prev: 0, rvfc: 0, err: '' };
+      v.addEventListener('loadeddata', () => { o.first = (performance.now() - t00) / 1000; log(`${name}: first frame after ${o.first.toFixed(1)} s`); }, { once: true });
+      if (v.requestVideoFrameCallback) { const f = () => { o.rvfc++; v.requestVideoFrameCallback(f); }; v.requestVideoFrameCallback(f); }
+      return o;
+    });
+    setInterval(() => {
+      for (const o of vs) {
+        try {
+          const vf = new VideoFrame(o.v); ctx.drawImage(vf, 0, 0, 64, 36); vf.close();
+          const d = ctx.getImageData(0, 0, 64, 36).data; let h = 0;
+          for (let i = 0; i < d.length; i += 4) h = (h * 31 + d[i] + d[i + 1] * 7) | 0;
+          o.reads++; if (h !== o.prev) { o.distinct++; o.prev = h; }
+        } catch (e) { o.err = e.name; }
+      }
+    }, 30);
+    for (;;) {
+      for (const o of vs) { o.reads = o.distinct = o.rvfc = 0; o.q0 = o.v.getVideoPlaybackQuality?.().totalVideoFrames ?? 0; }
+      await sleep(5000);
+      await log(vs.map((o) => `${o.name}: ${(o.distinct / 5).toFixed(0)} distinct/s (rvfc ${(o.rvfc / 5).toFixed(0)}, presented ${(((o.v.getVideoPlaybackQuality?.().totalVideoFrames ?? 0) - o.q0) / 5).toFixed(0)}, rs${o.v.readyState}${o.reads ? '' : ' ' + o.err})`).join(' | '));
+    }
+  } catch (e) { log('error ' + e.name + ' ' + e.message); }
+})();
+</script>

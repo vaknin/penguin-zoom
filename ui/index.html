@@ -56,6 +56,15 @@
 
   <div id="toast" class="toast" role="alert" hidden></div>
 
+  <!-- Waiting room: shown until the host admits us (Zoom's own box is hidden). -->
+  <div id="waiting" class="waiting" role="status">
+    <div class="idle-box">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1 id="waitingTitle">Waiting for the host to let you in</h1>
+      <p class="dim" id="waitingTopic"></p>
+    </div>
+  </div>
+
   <!-- Zoom's Active Apps Notifier must stay visible: opens Zoom's own panel. -->
   <button id="aan" class="aan" data-action="aan" aria-label="See apps that are accessing your meeting content" title="Apps accessing this meeting">
     <svg class="icon" data-icon="apps" aria-hidden="true"></svg>

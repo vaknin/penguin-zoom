@@ -40,6 +40,33 @@ use webkit2gtk::{
 };
 use wry::{WebViewBuilder, WebViewBuilderExtUnix, WebViewExtUnix};
 
+/// Writes the embedded tracer plugin to the runtime dir and points GStreamer
+/// (ours and the web process's, which inherits the environment) at it.
+fn install_camfix() {
+    const SO: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/libgstpenguincamfix.so"));
+    let Some(run) = std::env::var_os("XDG_RUNTIME_DIR").filter(|v| !v.is_empty()) else { return };
+    let dir = std::path::PathBuf::from(run).join("penguin-zoom/gst");
+    let file = dir.join("libgstpenguincamfix.so");
+    // Rewrite only on change: a new mtime makes GStreamer rescan the plugin.
+    if std::fs::read(&file).map(|old| old != SO).unwrap_or(true) {
+        // Write beside it and rename, so a running web process never maps a half-written file.
+        let tmp = dir.join(format!(".camfix-{}", std::process::id()));
+        if std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&tmp, SO)).and_then(|_| std::fs::rename(&tmp, &file)).is_err() {
+            eprintln!("camera workaround not installed: can't write {}", file.display());
+            return;
+        }
+    }
+    let join = |var: &str, add: &str, sep: &str| match std::env::var(var) {
+        Ok(v) if !v.is_empty() => format!("{v}{sep}{add}"),
+        _ => add.to_string(),
+    };
+    // SAFETY: called from main() before any other thread exists.
+    unsafe {
+        std::env::set_var("GST_PLUGIN_PATH", join("GST_PLUGIN_PATH", &dir.to_string_lossy(), ":"));
+        std::env::set_var("GST_TRACERS", join("GST_TRACERS", "penguincamfix", ";"));
+    }
+}
+
 fn main() {
     // Must happen before GTK or any other thread starts: the WebKit web process
     // inherits our environment, and 2.54's launcher never enables SAB itself
@@ -60,6 +87,20 @@ fn main() {
     };
     // SAFETY: still single-threaded here.
     unsafe { std::env::set_var("PULSE_PROP", pulse_prop) };
+    // WebKitGTK camera workaround (gst/camfix.c): hand the web process a
+    // GStreamer tracer that fixes its capture pipeline.
+    if std::env::var_os("PENGUIN_NO_CAMFIX").is_none() {
+        install_camfix();
+    }
+    // WebKitGTK 2.54 suspends a muted <video> that is outside the viewport when
+    // it is created, and for a camera/MediaStream element never resumes it
+    // (managePlayerSuspend/setViewportVisibility return early for MediaStream
+    // players): the SDK's off-screen capture element then never gets a frame.
+    // WebKit's own switch for its layout tests turns the suspend off.
+    if std::env::var_os("PENGUIN_SUSPEND_HIDDEN_VIDEO").is_none() {
+        // SAFETY: still single-threaded here.
+        unsafe { std::env::set_var("WEBKIT_GST_ALLOW_PLAYBACK_OF_INVISIBLE_VIDEOS", "1") };
+    }
     // Hyprland's `class` on GTK3 is the program name, not the application ID.
     glib::set_prgname(Some("penguin-zoom"));
 
@@ -167,10 +208,19 @@ fn main() {
 
     // Closing the window leaves the meeting first (the process exiting skips
     // the page's unload, so Zoom would keep us listed until it times out).
+    // The same on SIGTERM/SIGINT/SIGHUP (kill, logout, Ctrl+C): without this
+    // the process just dies and a ghost participant stays in the meeting.
+    for sig in [1, 2, 15] {
+        let proxy = event_loop.create_proxy();
+        glib::unix_signal_add(sig, move || {
+            let _ = proxy.send_event(());
+            glib::ControlFlow::Continue
+        });
+    }
     let mut closing: Option<std::time::Instant> = None;
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
-        if let Event::WindowEvent { event: WindowEvent::CloseRequested, .. } = event {
+        if matches!(event, Event::WindowEvent { event: WindowEvent::CloseRequested, .. } | Event::UserEvent(())) {
             if closing.is_none() {
                 let _ = webview.evaluate_script("try { window.zc && zc.leave() } catch (e) {}");
                 window.set_visible(false);

@@ -1,5 +1,7 @@
 # Local package for this machine: builds from the working tree one level up.
 #   cd packaging && makepkg -si
+# With cargo and npm from mise/rustup instead of pacman: makepkg -sid
+# (-d skips the dependency check, so make sure the runtime ones are installed).
 # Zoom's Meeting SDK for Web is fetched from npm at build time (Zoom's terms
 # govern redistribution, so it is never committed).
 pkgname=penguin-zoom
@@ -10,7 +12,7 @@ arch=('x86_64')
 license=('custom')
 depends=('webkit2gtk-4.1' 'gtk3' 'gst-plugins-good' 'gst-plugins-bad' 'gst-libav'
          'gst-plugin-pipewire' 'libpulse' 'libsecret' 'xdg-utils')
-makedepends=('cargo' 'npm')
+makedepends=('cargo' 'npm' 'gcc' 'pkgconf') # gcc + pkgconf: build.rs compiles gst/camfix.c
 optdepends=('xdg-desktop-portal-hyprland: screen sharing on Hyprland'
             'pipewire-pulse: switching speakers from the app')
 options=('!lto' '!debug')

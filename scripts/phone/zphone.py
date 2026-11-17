@@ -25,7 +25,7 @@ import os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import droid
 from droid import (COMMANDS, Snap, click, changed, d, dbg, fail, key, launch, log,
-                   sh, tap, until, wait)
+                   gone, sh, tap, until, wait)
 
 droid.NAME = "zphone"
 PKG = "us.zoom.videomeetings"
@@ -33,10 +33,15 @@ PKG = "us.zoom.videomeetings"
 POPUPS = r"^Not now$|^Got it$|^Maybe later$|^Later$|^No thanks$"
 COOLDOWN = r"Start your next meeting in"
 AUDIO, VIDEO ="meeting_toolbar_audio", "meeting_toolbar_video"
+PREVIEW = r"^Always show this preview when joining$"
 
 
 def in_meeting(s):
-    return s.id("activeVideoContainer")[0] is not None or s.id(AUDIO)[0] is not None
+    # Zoom's home screen keeps the meeting in a floating mini-window that also
+    # has an activeVideoContainer; "Back to meeting" there means we're not in it.
+    if s.id(AUDIO)[0] is not None:
+        return True
+    return s.id("activeVideoContainer")[0] is not None and not s.has(r"^Back to meeting")
 
 
 def wait_meeting(timeout):
@@ -85,6 +90,9 @@ def zoom_home(s):
 def toolbar():
     """The bottom toolbar, shown (a tap on the video toggles it). Returns its Snap."""
     s = Snap()
+    if panel_open(s):
+        close_panel()
+        s = Snap()
     if s.id(AUDIO)[0] is not None:
         return s
     if not in_meeting(s) or s.has(POPUPS):
@@ -92,7 +100,12 @@ def toolbar():
         s = Snap()
         if s.id(AUDIO)[0] is not None:
             return s
-    for _ in range(2):
+    for attempt in range(3):
+        if attempt == 2:
+            # A full-screen panel (Apps, Participants…) can cover the meeting
+            # while its video stays in the tree: close it with one Back.
+            key("KEYCODE_BACK")
+            changed(s)
         click(540, 700)
         ok, s = until(lambda s: s.id(AUDIO)[0] is not None, 1.2)
         if ok:
@@ -104,6 +117,17 @@ def more(item, expect=None):
     """Toolbar -> More -> item."""
     s = toolbar()
     click(*s.find(r"^More, button")[1])
+    # Zoom's More sheet slides up even with the phone's animations off (a tap
+    # on the first-read position hit "Apps" below the participants button):
+    # wait until the item is at the same place in two reads in a row.
+    prev = [None]
+
+    def still(s):
+        xy = s.target(item)[1]
+        ok = xy is not None and xy == prev[0]
+        prev[0] = xy
+        return ok
+    until(still, 3)
     if tap(item, 3, required=False, expect=expect):
         return
     droid.swipe("up")
@@ -141,6 +165,11 @@ def share():
     more(r"^Start share, button", expect=r"^Screen$")
     tap(r"^Screen$")
     # Android's screen-capture dialog: pick the entire screen if asked, then start.
+    # Zoom (2026-11) first asks itself: title "Share screen", plain-text options
+    # "Share entire screen" / "Share specific app" (not clickable, so tap()
+    # would hit the same-named title of the next dialog). Pick the screen.
+    if wait(r"^Share specific app$|^Share your screen with Zoom\?$", 5)[0] is not None and Snap().has(r"^Share specific app$"):
+        tap(r"^Share entire screen$", 3, expect=r"^Share your screen with Zoom\?$")
     n, _ = wait(r"^Share entire screen$|^Entire screen$|^A single app$|^Share one app$|^Start now$|^Share screen$", 5)
     if n is not None and re.search(r"single app|one app", (n.get("text") or ""), re.I):
         tap(r"single app|one app", 2)
@@ -152,29 +181,77 @@ def share():
 
 
 def stop_share():
+    # While sharing, Zoom's meeting screen shows the shared screen itself with
+    # the toolbar hidden; "Stop share" is in the More sheet (2026-11-17).
     launch(PKG)
-    if not tap(r"^Stop share|Stop sharing", 4, required=False):
-        meeting()
-        tap(r"^Stop share|Stop sharing", 3)
+    if not tap(r"^Stop share|Stop sharing", 2, required=False):
+        more(r"^Stop share, button")
+    if not gone(r"^Stop share|Stop sharing|sharing your screen", 5):
+        fail("share did not stop")
     log("share stopped")
 
 
 def participants():
-    more(r"participants?, button$", expect=r"Participants \(\d+\)|^Invite$|Mute all")
+    # 2026-11: the list opens in a split view titled just "Participants".
+    more(r"participants?, button$", expect=r"^Participants( \(\d+\))?$|^Invite$|Mute all")
+
+
+PANEL_IDS = ("pull_bar_container", "dragHandleView", "zm_zapp_back_button", "tv_topbar_top_title")
+
+
+def panel_open(s):
+    """A panel or sheet over the meeting. Zoom keeps the meeting video in a strip
+    above its split-view panels, so in_meeting() alone is true with one open
+    (2026-11-17: allow-share left Participants settings open, which hid the
+    waiting-room prompt and the toolbar for a whole test run)."""
+    return any(s.id(i)[0] is not None for i in PANEL_IDS) or s.has(r"^Participants( \(\d+\))?$")
 
 
 def close_panel():
     for _ in range(4):
         s = Snap()
-        if in_meeting(s):
+        if in_meeting(s) and not panel_open(s):
             return
-        key("KEYCODE_BACK")
+        # The panel's own Close/Back button first (Back key presses count
+        # towards droid.NAV_MAX, and stacked panels need several).
+        _, xy = s.id("ibtn_topbar_left_close")
+        if xy is None:
+            _, xy = s.id("zm_zapp_back_button")
+        if xy is None:
+            n, xy = s.target(r"^Close$|^Back$")
+            if n is not None and n.get("clickable") != "true":
+                xy = None
+        if xy is not None:
+            click(*xy)
+        else:
+            key("KEYCODE_BACK")
         changed(s, 1.0)
+    if panel_open(Snap()):
+        fail("could not close the panel over the meeting")
+
+
+def tap_row(name, expect, timeout=6):
+    """Tap a participant's row in the open list. By resource id: the same name
+    is also a label on the meeting video strip above the list, and that one
+    comes first on screen (2026-11-17: make-host tapped the video)."""
+    def row(s):
+        for n, xy in s.nodes:
+            if (n.get("resource-id") or "").endswith("txtScreenName") and (n.get("text") or "") == name:
+                return xy
+    for _ in range(3):
+        xy, _ = until(row, timeout)  # the list shows "Loading..." first
+        if xy is None:
+            return False
+        click(*xy)
+        if until(lambda s: s.has(expect), 1.5)[0]:
+            return True
+    return False
 
 
 def make_host(name):
     participants()
-    tap(re.escape(name), expect=r"^Make host$")
+    if not tap_row(name, r"^Make host$"):
+        fail(f"{name} is not in the participants list (or no Make host for them)")
     tap(r"^Make host$")
     tap(r"^(Change host|Change|Make host|Yes|OK)$", 3, required=False)
     close_panel()
@@ -186,7 +263,7 @@ def admit(name):
     if name == "all":
         ok = tap(r"^Admit all$", 5, required=False) or tap(r"^Admit$", 1, required=False)
     else:
-        ok = tap(re.escape(name), 5, required=False, expect=r"^Admit$") and tap(r"^Admit$", 2, required=False)
+        ok = tap_row(name, r"^Admit$", 5) and tap(r"^Admit$", 2, required=False)
     close_panel()
     if not ok:
         fail(f"could not admit {name}")
@@ -219,22 +296,29 @@ def allow_share():
 
 def start():
     launch(PKG)
+    tap(POPUPS, 1.5, required=False)  # e.g. the upgrade offer after a 40-minute meeting
     ok, s = until(lambda s: in_meeting(s) or s.has(r"^Meet$|^New meeting|^Start a meeting|^Back to meeting"), 6)
     if in_meeting(s) or s.has(r"^Back to meeting"):
         log("already in a meeting")
         return
     tap(r"^Meet$|^New meeting|^Start a meeting", 4, required=False)
     tap(r"^Start$|^Start a meeting$|^Start meeting$", 6)
+    # Zoom (2026-11) may show a camera/mic preview with its own Start button
+    # ("Always show this preview when joining"); press that one too.
+    _, s = until(lambda s: s.id(AUDIO)[0] is not None or s.has(COOLDOWN) or s.has(PREVIEW), 20)
+    if s.has(PREVIEW):
+        tap(r"^Start$", 4)
     # The joining screen already looks like a meeting: success only once the
-    # toolbar's mic button exists. Free plan: after a 40-min meeting Zoom makes
-    # you wait ("Start your next meeting in N minute(s)").
-    _, s = until(lambda s: s.id(AUDIO)[0] is not None or s.has(COOLDOWN), 20)
+    # toolbar's mic button (or the meeting's video area) exists. Free plan:
+    # after a 40-min meeting Zoom makes you wait ("Start your next meeting in
+    # N minute(s)").
+    _, s = until(lambda s: (in_meeting(s) and not s.has(PREVIEW)) or s.has(COOLDOWN), 20)
     n, _ = s.find(COOLDOWN)
     if n is not None:
         mins = re.search(r"(\d+)\s*minute", n.get("text") or "")
         tap(r"^CANCEL$|^Cancel$", 2, required=False)
         fail(f"Zoom free-plan cooldown: next meeting in {mins.group(1) if mins else '?'} min")
-    if s.id(AUDIO)[0] is None:
+    if not in_meeting(s) or s.has(PREVIEW):
         fail("meeting did not start")
     log("meeting started")
 
@@ -269,6 +353,8 @@ def leave():
 COMMANDS.update({
     "meeting": lambda a: (meeting(), log("in meeting")),
     "state": lambda a: state(),
+    # Debug: open the More sheet and print what is on it.
+    "more-ui": lambda a: (click(*toolbar().find(r"^More, button")[1]), wait(r"Meeting info", 3), droid.ui()),
     "mic": lambda a: set_toggle(AUDIO, a[0] == "on", "Mute", "Unmute", "mic"),
     "cam": lambda a: set_toggle(VIDEO, a[0] == "on", "Stop", "Start", "cam"),
     "share": lambda a: share(),

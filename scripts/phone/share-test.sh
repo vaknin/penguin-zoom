@@ -4,6 +4,9 @@
 #   S: the phone stops; the spike shares (real F9 keypress -> SDK "Share Screen"
 #      -> portal picker on the headless output -> Tab (eDP-1 card) + Return);
 #      phone screenshots show whether it arrives.
+# DISABLED 2026-11-17: opens a picker and types into the owner's Hyprland
+# session. two-way-test.sh covers sharing with ZOOM_SHARE_SOURCE=test in cage.
+echo "share-test.sh: disabled, it takes the owner's focus and keyboard" >&2; exit 1
 S="${S:?set S to a work directory}"; D="$(cd "$(dirname "$0")" && pwd)"; mkdir -p "$S/phone"
 ROOT="$(cd "$D/../.." && pwd)"; P="$D/ph.sh"; OUT="$S/${1:-share}"
 read MID MPW < "$S/meeting.txt"

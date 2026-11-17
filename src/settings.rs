@@ -26,10 +26,15 @@ pub struct Settings {
     pub name: String,
     /// PulseAudio sink name to route our playback to; None = system default.
     pub speaker_id: Option<String>,
-    /// Chosen camera and microphone, by label (device ids change between
-    /// sessions); None = automatic (first real camera, system default mic).
+    /// Chosen camera and microphone, by label; None = whatever the system
+    /// gives by default.
     pub camera: Option<String>,
     pub mic: Option<String>,
+    /// The same choice by WebKit device id. Ids stay the same between launches
+    /// (checked 2026-11-17) and work before the first permission grant, when
+    /// labels are still hidden; they also tell apart two devices with one label.
+    pub camera_id: Option<String>,
+    pub mic_id: Option<String>,
 }
 
 impl Default for Settings {
@@ -44,6 +49,8 @@ impl Default for Settings {
             speaker_id: None,
             camera: None,
             mic: None,
+            camera_id: None,
+            mic_id: None,
         }
     }
 }
@@ -117,7 +124,7 @@ mod tests {
             v,
             serde_json::json!({"style":"standard","joinMuted":true,"joinCameraOff":false,
                 "hideIdle":true,"followTheme":true,"name":"","speakerId":null,
-                "camera":null,"mic":null})
+                "camera":null,"mic":null,"cameraId":null,"micId":null})
         );
     }
 

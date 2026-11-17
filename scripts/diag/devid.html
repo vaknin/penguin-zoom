@@ -1,0 +1,19 @@
+<!doctype html><meta charset=utf-8><body style="background:#111;color:#ccc">
+<!-- Are camera device ids stable across launches, and usable before the first
+     grant? Copy into ui/ as _devid.html (never leave it there: ui/ is packaged),
+     open /_devid.html, then again with ?id=<an id it logged>. -->
+<script>
+const log = (m) => fetch('/api/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ level: 'info', msg: 'devid: ' + m }) });
+const list = async () => (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput')
+  .map((d) => `${d.deviceId || '(none)'}="${d.label}"`).join(' ');
+(async () => {
+  try {
+    await log('before grant: ' + await list());
+    const id = new URLSearchParams(location.search).get('id');
+    const st = await navigator.mediaDevices.getUserMedia({ video: id ? { deviceId: { exact: id } } : true });
+    await log(`opened "${st.getVideoTracks()[0].label}"${id ? ' by saved id' : ''}`);
+    await log('after grant: ' + await list());
+    st.getTracks().forEach((t) => t.stop());
+  } catch (e) { log('error ' + e.name + ' ' + e.message); }
+})();
+</script>

@@ -14,8 +14,9 @@ if ss -ltn | grep -q '127.0.0.1:53682 '; then echo "Penguin is already running (
 # Test settings live in the work dir, never in ~/.config/penguin-zoom.
 export XDG_CONFIG_HOME="$S/config"; mkdir -p "$XDG_CONFIG_HOME"
 enc() { python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1], safe=","))' "$1"; }
-URL="http://127.0.0.1:53682/?m=$(enc "https://zoom.us/j/$MID?pwd=$MPW")&autojoin&name=$(enc "${TNAME:-Penguin test}")&script=$(enc "$STEPS")"
-"$D/admit.sh" 60 > "$OUT/admit.log" 2>&1 &
+URL="http://127.0.0.1:53682/?m=$(enc "https://zoom.us/j/$MID?pwd=$MPW")&autojoin&name=$(enc "${TNAME:-Penguin test}")&script=$(enc "$STEPS")${URLX:+&$URLX}"
+# ADMIT_DELAY=<secs>: stay in the waiting room that long first.
+( sleep "${ADMIT_DELAY:-0}"; exec "$D/admit.sh" 60 ) > "$OUT/admit.log" 2>&1 &
 shots=(); for t in $(seq 10 10 $((SECS-5))); do shots+=("$t"); done
 "$ROOT/scripts/headless-run.sh" "$SECS" "$OUT" "$URL" "${shots[@]}" >/dev/null 2>&1 &
 HR=$!
@@ -26,8 +27,9 @@ for t in 30 60 90; do
 done
 case "$END" in
   leave) sleep $((SECS - ${prev:-0} - 12)); "$ROOT/target/debug/penguin-zoom" --cmd leave; echo "sent leave" ;;
-  close) sleep $((SECS - ${prev:-0} - 12)); hyprctl dispatch 'hl.dsp.window.close({ window = "class:penguin-zoom" })' >/dev/null 2>&1 \
-           || hyprctl dispatch closewindow class:penguin-zoom; echo "sent close" ;;
+  # The app runs in cage (headless-run.sh), never in the owner's Hyprland:
+  # never hyprctl here. Closing = ending cage's only client.
+  close) sleep $((SECS - ${prev:-0} - 12)); pkill -TERM -f "^$ROOT/target/debug/penguin-zoom\$"; echo "sent close" ;;
 esac
 sleep 8; "$D/ph.sh" shot "$NAME-phone-end" >/dev/null
 wait "$HR"

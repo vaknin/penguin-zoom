@@ -106,7 +106,7 @@ function go(screen) {
   if (screen === 'join') renderJoin();
   else zc.previewStop();
   if (screen === 'meeting') renderMeeting();
-  else { setPanel(null); body.classList.remove('idle-hide'); }
+  else { setPanel(null); body.classList.remove('idle-hide', 'in-waiting'); }
 }
 
 // ---------- join ----------
@@ -173,6 +173,12 @@ async function doJoin(e) {
 // ---------- meeting ----------
 function renderMeeting() {
   const m = S.meet;
+  // In the meeting screen but not in the meeting yet: the waiting room.
+  // After having been in, the same state means Zoom is reconnecting.
+  if (m.joined) S.wasIn = true;
+  body.classList.toggle('in-waiting', !m.joined);
+  $('waitingTitle').textContent = S.wasIn ? 'Reconnecting…' : 'Waiting for the host to let you in';
+  $('waitingTopic').textContent = m.topic || (S.launch ? 'Meeting ' + fmtNumber(S.launch.number) : '');
   const mute = $('btnMute');
   const noAudio = m.joined && !m.audioJoined;
   setIcon(mute.querySelector('svg'), m.muted || noAudio ? 'micOff' : 'mic');
@@ -433,19 +439,19 @@ function renderDevices() {
   // first in the list. Every device is listed; nothing is filtered out.
   const cur = (list, id, label) => (id && list.some((d) => d.id === id) ? id : null)
     || (label && (list.find((d) => d.name === label) || {}).id) || (list[0] || {}).id;
-  const cam = cur(S.dev.cams, S.dev.cam, window.__zcDev.camera);
-  const mic = cur(S.dev.mics, S.dev.mic, window.__zcDev.mic);
+  const cam = cur(S.dev.cams, S.dev.cam || window.__zcDev.cameraId, window.__zcDev.camera);
+  const mic = cur(S.dev.mics, S.dev.mic || window.__zcDev.micId, window.__zcDev.mic);
   $('devCams').replaceChildren(...(S.dev.cams.length ? S.dev.cams.map((d) => devRow(d.name, d.id === cam, () => pickCam(d))) : empty('No camera found')));
   $('devMics').replaceChildren(...(S.dev.mics.length ? S.dev.mics.map((d) => devRow(d.name, d.id === mic, () => pickMic(d))) : empty('No microphone found')));
   $('devSpk').replaceChildren(...(S.dev.spk.length ? S.dev.spk.map((d) => devRow(d.name, d.current, () => pickSpk(d))) : empty('No speakers found')));
 }
-function remember(kind, name) {
-  window.__zcDev[kind] = name;
-  if (S.settings[kind] !== name) { S.settings[kind] = name; putSettings(); }
+function remember(kind, d) {
+  window.__zcDev[kind] = d.name; window.__zcDev[kind + 'Id'] = d.id;
+  if (S.settings[kind] !== d.name || S.settings[kind + 'Id'] !== d.id) { S.settings[kind] = d.name; S.settings[kind + 'Id'] = d.id; putSettings(); }
 }
 function pickCam(d) {
   S.dev.cam = d.id;
-  if (!d.placeholder) remember('camera', d.name);
+  if (!d.placeholder) remember('camera', d);
   if (S.screen === 'join') { S.previewHold = false; startPreview(); }
   else if (d.placeholder) showError("Zoom hasn't shared device names yet; try again in a moment");
   else zc.useCamera(d.name);
@@ -453,7 +459,7 @@ function pickCam(d) {
 }
 function pickMic(d) {
   S.dev.mic = d.id;
-  if (!d.placeholder) remember('mic', d.name);
+  if (!d.placeholder) remember('mic', d);
   if (S.screen === 'join') { S.previewHold = false; startPreview(); }
   else if (d.placeholder) showError("Zoom hasn't shared device names yet; try again in a moment");
   else zc.useMic(d.name);
@@ -535,6 +541,7 @@ function onEvent(json) {
   try { e = JSON.parse(json); } catch { return; }
   switch (e.type) {
     case 'state':
+      if (S.layoutCheck) break; // ?show= keeps its made-up state
       S.meet = e;
       if (e.joined && S.screen !== 'meeting' && !S.joining) go('meeting');
       if (S.screen === 'meeting') renderMeeting();
@@ -550,6 +557,7 @@ function onEvent(json) {
     case 'recording': renderNotice(e); break;
     case 'error': showError(e.msg); break;
     case 'left':
+      S.wasIn = false;
       S.meet = { joined: false, topic: '', muted: true, video: false, sharing: false, users: [] };
       S.breakout = { status: 'initial', room: null, canReturn: true };
       // Don't reopen the camera and mic by ourselves after a meeting.
@@ -692,6 +700,8 @@ async function start() {
   // Remembered camera/mic (labels) apply to every capture (glue.js).
   window.__zcDev.camera = S.settings.camera || null;
   window.__zcDev.mic = S.settings.mic || null;
+  window.__zcDev.cameraId = S.settings.cameraId || null;
+  window.__zcDev.micId = S.settings.micId || null;
   S.joinMic = !S.settings.joinMuted;
   S.joinCam = !S.settings.joinCameraOff;
   applyStyle();
@@ -723,8 +733,8 @@ async function start() {
         + `people=${(m.users || []).length} panel=${S.panel} chat=${$('chatList').children.length} view=${S.settings.view || ''} `
         + `error=${S.error ? JSON.stringify(S.error).slice(0, 200) : ''} `
         + `users=${(m.users || []).map((u) => `${u.name}${u.me ? '*' : ''}:${u.host ? 'H' : u.cohost ? 'C' : ''}${u.waiting ? 'W' : ''}`
-          + `${u.audio ? (u.muted ? 'm' : 'M') : '-'}${u.video ? 'V' : 'v'}${u.sharing ? 'S' : ''}`).join(',')}`);
-    }, 5000);
+          + `${u.audio ? (u.muted ? 'm' : 'M') : '-'}${u.video ? 'V' : 'v'}${u.sharing ? 'S' : ''}${u.speaking ? '!' : ''}`).join(',')}`);
+    }, 2000);
     for (const k of ['error', 'warn']) {
       const orig = console[k].bind(console);
       console[k] = (...a) => { orig(...a); tlog(`console.${k} ` + a.map((x) => { try { return x instanceof Error ? x.stack || x.message : typeof x === 'object' ? JSON.stringify(x) : String(x); } catch { return String(x); } }).join(' ')); };
@@ -734,8 +744,9 @@ async function start() {
     $('joinName').value = tq.get('name') || 'Test';
     await doJoin();
     const steps = (tq.get('script') || '').split(',').filter(Boolean);
+    const stepMs = +tq.get('stepms') || 6000; // ?stepms=3000: faster soak runs
     for (const step of steps) {
-      await new Promise((r) => setTimeout(r, 6000));
+      await new Promise((r) => setTimeout(r, stepMs));
       tlog('step ' + step);
       if (step === 'camprobe') {
         const ids = [...new Set((await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput').map((d) => d.deviceId))];
@@ -754,6 +765,8 @@ async function start() {
       }
       if (step === 'devlist') { try { tlog('devlist ' + JSON.stringify(await zc.devices())); } catch (e) { tlog('devlist failed ' + e); } continue; }
       if (step.startsWith('cam:')) { tlog('useCamera ' + await zc.useCamera(step.slice(4))); continue; }
+      if (step === 'vstats') { try { tlog('vstats ' + JSON.stringify(await zc.videoStats())); } catch (e) { tlog('vstats failed ' + e); } continue; }
+      if (step === 'layout') { try { tlog('layout ' + JSON.stringify(zc.layout())); } catch (e) { tlog('layout failed ' + e); } continue; }
       if (step === 'dump') { try { tlog('dump ' + JSON.stringify(zc.debug())); } catch (e) { tlog('dump failed ' + e); } continue; }
       // Host steps by name: admit:<name>, mute-user:<name>, make-host:<name>.
       const hm = step.match(/^(admit|mute-user|make-host):(.+)$/);
@@ -783,13 +796,16 @@ async function start() {
         msg: `name field value=${JSON.stringify(f.value)} keys=${keys.join(' ')} active=${document.activeElement?.id || document.activeElement?.tagName}` }) }), 6000);
     }, 4000);
   }
-  // Off-screen layout checks (tests only, with ?nomedia): ?show=meeting|sharing|chat|devices|invite|room|settings
+  // Off-screen layout checks (tests only, with ?nomedia): ?show=meeting|waiting|sharing|chat|devices|invite|room|settings
   const show = NO_MEDIA && new URLSearchParams(location.search).get('show');
   if (show) {
-    S.meet = { joined: true, topic: 'Layout check', muted: true, video: false, sharing: show === 'sharing',
+    S.meet = { joined: show !== 'waiting', topic: 'Layout check', muted: true, video: false, sharing: show === 'sharing',
       users: [{ id: 1, name: 'You', me: true, muted: true }, { id: 2, name: 'Host', host: true }] };
     window.__zcShare.live = show === 'sharing'; // glue's snapshots read this
+    S.layoutCheck = true;
     if (show !== 'settings') go('meeting');
+    setTimeout(() => fetch('/api/log', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ level: 'test',
+      msg: `layout show=${show} screen=${body.dataset.screen} class="${body.className}" visible=${[...document.querySelectorAll('#meeting > *, #zoomRoot')].filter((el) => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).opacity !== '0').map((el) => el.id || el.className).join(',')}` }) }), 2500);
     if (show === 'chat') { setPanel('chat'); addChat({ from: 'Host', text: 'Hello from the layout check', me: false }); addChat({ from: '', text: 'Hi!', me: true }); }
     if (show === 'devices') openDevices($('btnDevices'));
     if (show === 'invite') onEvent(JSON.stringify({ type: 'breakout', status: 'invited', room: { id: 'r2', name: 'Room 2' }, canReturn: true }));

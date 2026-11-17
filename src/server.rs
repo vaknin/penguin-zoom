@@ -61,7 +61,11 @@ struct Session {
     pkce_verifier: Option<String>,
     pkce_state: Option<String>,
     access_token: Option<String>,
+    /// Unix time the access token stops working (Zoom: one hour).
+    access_expires: i64,
     refresh_token: Option<String>,
+    /// The keyring was already asked for a saved sign-in in this run.
+    keyring_checked: bool,
     user_label: Option<String>,
 }
 
@@ -78,6 +82,11 @@ struct AppState {
     settings: Arc<Mutex<Settings>>,
     /// JSON event payloads for `/api/events` subscribers.
     events: broadcast::Sender<String>,
+    /// Zoom's web and API hosts; the tests point these at a stand-in server.
+    zoom_web: String,
+    zoom_api: String,
+    /// Keep the sign-in in the keyring (off in tests: `PENGUIN_NO_KEYRING`).
+    keyring: bool,
 }
 
 /// Serves on `listener`, which main.rs already bound (that bind is the
@@ -92,6 +101,9 @@ pub async fn run(root: PathBuf, listener: std::net::TcpListener, launch: Option<
         launch: launch.unwrap_or_default(),
         settings,
         events: broadcast::channel(32).0,
+        zoom_web: "https://zoom.us".into(),
+        zoom_api: "https://api.zoom.us".into(),
+        keyring: std::env::var_os("PENGUIN_NO_KEYRING").is_none(),
     };
 
     let app = Router::new()
@@ -321,7 +333,7 @@ async fn remote_signature(s: &AppState, base: &str, mn: &str, role: u8) -> Respo
         .timeout(std::time::Duration::from_secs(15))
         .json(&json!({ "meetingNumber": mn, "role": role }));
     if role == 1 {
-        match s.session.lock().await.access_token.clone() {
+        match access_token(s).await {
             Some(t) => rq = rq.bearer_auth(t),
             None => return err(StatusCode::UNAUTHORIZED, "sign in to start a meeting as host"),
         }
@@ -393,7 +405,7 @@ async fn oauth_login(State(s): State<AppState>) -> Response {
         sess.pkce_verifier = Some(verifier);
         sess.pkce_state = Some(st.clone());
     }
-    let mut u = url::Url::parse("https://zoom.us/oauth/authorize").unwrap();
+    let mut u = url::Url::parse(&format!("{}/oauth/authorize", s.zoom_web)).unwrap();
     u.query_pairs_mut()
         .append_pair("response_type", "code")
         .append_pair("client_id", &client_id)
@@ -432,7 +444,7 @@ async fn oauth_callback(
     // Public client: client_id in the form body, no Authorization header.
     let res = s
         .http
-        .post("https://zoom.us/oauth/token")
+        .post(format!("{}/oauth/token", s.zoom_web))
         .form(&[
             ("grant_type", "authorization_code"),
             ("code", code.as_str()),
@@ -457,21 +469,145 @@ async fn oauth_callback(
     let refresh = tok["refresh_token"].as_str().map(str::to_owned);
     eprintln!("[oauth] signed in; scopes: {}", tok["scope"].as_str().unwrap_or("?"));
     let label = match &access {
-        Some(a) => fetch_me(&s.http, a).await,
+        Some(a) => fetch_me(&s, a).await,
         None => None,
     };
+    if let Some(r) = &refresh {
+        keyring_save_refresh(s.keyring, r).await;
+    }
     {
         let mut sess = s.session.lock().await;
         sess.access_token = access;
+        sess.access_expires = now() + tok["expires_in"].as_i64().unwrap_or(3600);
         sess.refresh_token = refresh;
+        sess.keyring_checked = true;
         sess.user_label = label;
     }
     Redirect::to("/").into_response()
 }
 
-async fn fetch_me(http: &reqwest::Client, access: &str) -> Option<String> {
-    let v: serde_json::Value = http
-        .get("https://api.zoom.us/v2/users/me")
+// The sign-in survives restarts through the refresh token in the keyring
+// (`secret-tool`, attributes service=penguin-zoom key=refresh-token). Zoom
+// returns a new refresh token with every refresh and the old one stops
+// working, so the stored one is replaced each time. `PENGUIN_NO_KEYRING=1`
+// (tests) keeps the sign-in in memory only.
+const KEYRING_REFRESH: [&str; 4] = ["service", "penguin-zoom", "key", "refresh-token"];
+
+async fn keyring_load_refresh(on: bool) -> Option<String> {
+    if !on {
+        return None;
+    }
+    let out = tokio::process::Command::new("secret-tool")
+        .arg("lookup")
+        .args(KEYRING_REFRESH)
+        .output()
+        .await
+        .ok()?;
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (out.status.success() && !s.is_empty()).then_some(s)
+}
+
+/// The token goes to secret-tool on stdin, never on a command line.
+async fn keyring_save_refresh(on: bool, token: &str) {
+    use tokio::io::AsyncWriteExt;
+    if !on {
+        return;
+    }
+    let child = tokio::process::Command::new("secret-tool")
+        .args(["store", "--label=Penguin for Zoom sign-in"])
+        .args(KEYRING_REFRESH)
+        .stdin(std::process::Stdio::piped())
+        .spawn();
+    let ok = match child {
+        Ok(mut c) => {
+            let wrote = match c.stdin.take() {
+                Some(mut i) => i.write_all(token.as_bytes()).await.is_ok(),
+                None => false,
+            };
+            wrote && c.wait().await.is_ok_and(|st| st.success())
+        }
+        Err(_) => false,
+    };
+    if !ok {
+        eprintln!("[oauth] could not save the sign-in in the keyring; it lasts until the app closes");
+    }
+}
+
+async fn keyring_clear_refresh(on: bool) {
+    if on {
+        let _ = tokio::process::Command::new("secret-tool").arg("clear").args(KEYRING_REFRESH).status().await;
+    }
+}
+
+/// A working access token, or None when not signed in. Refreshes it when it
+/// is about to expire, and restores a saved sign-in on the first call. The
+/// session lock is held across the refresh on purpose: two refreshes with the
+/// same refresh token would leave one of them with a dead token.
+async fn access_token(s: &AppState) -> Option<String> {
+    let mut sess = s.session.lock().await;
+    if let Some(t) = &sess.access_token
+        && now() < sess.access_expires - 60
+    {
+        return Some(t.clone());
+    }
+    if sess.refresh_token.is_none() && !sess.keyring_checked {
+        sess.keyring_checked = true;
+        sess.refresh_token = keyring_load_refresh(s.keyring).await;
+    }
+    let refresh = sess.refresh_token.clone()?;
+    let client_id = public_client_id().unwrap_or_default();
+    let res = s
+        .http
+        .post(format!("{}/oauth/token", s.zoom_web))
+        .timeout(std::time::Duration::from_secs(10))
+        .form(&[
+            ("grant_type", "refresh_token"),
+            ("refresh_token", refresh.as_str()),
+            ("client_id", client_id.as_str()),
+        ])
+        .send()
+        .await;
+    let r = match res {
+        Ok(r) => r,
+        Err(e) => {
+            // Offline: keep the refresh token for the next try.
+            eprintln!("[oauth] refresh failed: {e}");
+            return None;
+        }
+    };
+    let st = r.status();
+    let v: serde_json::Value = r.json().await.unwrap_or_default();
+    let Some(access) = v["access_token"].as_str().filter(|_| st.is_success()) else {
+        eprintln!("[oauth] refresh: {st} {}", redact(&v));
+        if st == StatusCode::BAD_REQUEST || st == StatusCode::UNAUTHORIZED {
+            // Zoom no longer accepts this refresh token (expired after 90
+            // days, revoked, or already used): the user has to sign in again.
+            // Other failures (429, 5xx) keep it for the next try.
+            sess.access_token = None;
+            sess.refresh_token = None;
+            sess.user_label = None;
+            keyring_clear_refresh(s.keyring).await;
+        }
+        return None;
+    };
+    let access = access.to_owned();
+    sess.access_token = Some(access.clone());
+    sess.access_expires = now() + v["expires_in"].as_i64().unwrap_or(3600);
+    if let Some(new) = v["refresh_token"].as_str() {
+        sess.refresh_token = Some(new.to_owned());
+        keyring_save_refresh(s.keyring, new).await;
+    }
+    if sess.user_label.is_none() {
+        sess.user_label = fetch_me(s, &access).await;
+    }
+    eprintln!("[oauth] access token refreshed");
+    Some(access)
+}
+
+async fn fetch_me(s: &AppState, access: &str) -> Option<String> {
+    let v: serde_json::Value = s
+        .http
+        .get(format!("{}/v2/users/me", s.zoom_api))
         .bearer_auth(access)
         .send()
         .await
@@ -491,15 +627,14 @@ async fn fetch_me(http: &reqwest::Client, access: &str) -> Option<String> {
 /// `/users/me/token?type=zak` is tried first; `/users/me/zak` (scope
 /// `user:read:zak`) stays as a fallback in case the scope changes.
 async fn zak(State(s): State<AppState>) -> Response {
-    let access = s.session.lock().await.access_token.clone();
-    let Some(access) = access else {
+    let Some(access) = access_token(&s).await else {
         return err(StatusCode::UNAUTHORIZED, "not signed in");
     };
     let mut last = String::new();
     for (path, field) in [("/v2/users/me/token?type=zak", "token"), ("/v2/users/me/zak", "token")] {
         match s
             .http
-            .get(format!("https://api.zoom.us{path}"))
+            .get(format!("{}{path}", s.zoom_api))
             .bearer_auth(&access)
             .send()
             .await
@@ -526,19 +661,23 @@ async fn zak(State(s): State<AppState>) -> Response {
 /// (PLAN.md §6); `revoked: false` tells the page to point the user at the
 /// Marketplace's Added apps page instead.
 async fn signout(State(s): State<AppState>) -> Response {
-    let token = {
+    // Revoke needs a token Zoom still accepts, so refresh first if needed.
+    let token = access_token(&s).await;
+    {
         let mut sess = s.session.lock().await;
         sess.user_label = None;
         sess.refresh_token = None;
-        sess.access_token.take()
-    };
+        sess.access_token = None;
+        sess.keyring_checked = true;
+    }
+    keyring_clear_refresh(s.keyring).await;
     let Some(token) = token else {
         return Json(json!({ "revoked": true, "note": "was not signed in" })).into_response();
     };
     let client_id = public_client_id().unwrap_or_default();
     let revoked = match s
         .http
-        .post("https://zoom.us/oauth/revoke")
+        .post(format!("{}/oauth/revoke", s.zoom_web))
         .form(&[("token", token.as_str()), ("client_id", client_id.as_str())])
         .send()
         .await
@@ -558,9 +697,10 @@ async fn signout(State(s): State<AppState>) -> Response {
 }
 
 async fn status(State(s): State<AppState>) -> Response {
+    let signed_in = access_token(&s).await.is_some();
     let sess = s.session.lock().await;
     Json(json!({
-        "signedIn": sess.access_token.is_some(),
+        "signedIn": signed_in,
         "hasRefresh": sess.refresh_token.is_some(),
         "user": sess.user_label,
         "publicClientConfigured": public_client_id().is_some(),
@@ -815,5 +955,160 @@ mod tests {
         let r = redact_str("zak=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk ok");
         assert_eq!(r, "zak=[redacted] ok");
         assert_eq!(redact_str("short words stay"), "short words stay");
+    }
+
+    // ---- sign-in: refresh, rotation, ZAK and sign-out against a stand-in for Zoom ----
+
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// A stand-in for zoom.us + api.zoom.us. Refresh token `rN` yields access
+    /// token `aN` and refresh token `r(N+1)`, each usable once, as at Zoom;
+    /// `busy` gets a 429; anything else is refused with 400.
+    #[derive(Clone, Default)]
+    struct Fake {
+        refreshes: Arc<AtomicUsize>,
+        used: Arc<Mutex<Vec<String>>>,
+        revoked: Arc<Mutex<Vec<String>>>,
+    }
+
+    async fn fake_token(State(f): State<Fake>, axum::Form(q): axum::Form<HashMap<String, String>>) -> Response {
+        f.refreshes.fetch_add(1, Ordering::SeqCst);
+        let r = q.get("refresh_token").cloned().unwrap_or_default();
+        if q.get("grant_type").map(String::as_str) != Some("refresh_token") || !q.contains_key("client_id") {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid_request"}))).into_response();
+        }
+        if r == "busy" {
+            return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": "rate"}))).into_response();
+        }
+        let n = r.strip_prefix('r').and_then(|n| n.parse::<u32>().ok());
+        let mut used = f.used.lock().await;
+        match n {
+            Some(n) if !used.contains(&r) => {
+                used.push(r);
+                Json(json!({"access_token": format!("a{n}"), "refresh_token": format!("r{}", n + 1), "expires_in": 3600}))
+                    .into_response()
+            }
+            _ => (StatusCode::BAD_REQUEST, Json(json!({"error": "invalid_grant"}))).into_response(),
+        }
+    }
+
+    async fn fake_api(headers: axum::http::HeaderMap, uri: axum::http::Uri) -> Response {
+        let auth = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("");
+        if !auth.starts_with("Bearer a") {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+        match uri.path() {
+            "/v2/users/me" => Json(json!({"first_name": "Test", "last_name": "User"})).into_response(),
+            "/v2/users/me/token" => Json(json!({"token": format!("zak-for-{}", &auth[7..])})).into_response(),
+            _ => StatusCode::NOT_FOUND.into_response(),
+        }
+    }
+
+    async fn fake_revoke(State(f): State<Fake>, axum::Form(q): axum::Form<HashMap<String, String>>) -> Response {
+        f.revoked.lock().await.push(q.get("token").cloned().unwrap_or_default());
+        Json(json!({"status": "success"})).into_response()
+    }
+
+    /// App state wired to a fresh stand-in, signed in with `refresh` if given.
+    async fn fake_zoom(refresh: Option<&str>) -> (AppState, Fake) {
+        let fake = Fake::default();
+        let app = Router::new()
+            .route("/oauth/token", post(fake_token))
+            .route("/oauth/revoke", post(fake_revoke))
+            .fallback(fake_api)
+            .with_state(fake.clone());
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", l.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+        let state = AppState {
+            root: PathBuf::new(),
+            session: Arc::new(Mutex::new(Session {
+                refresh_token: refresh.map(str::to_owned),
+                ..Default::default()
+            })),
+            http: reqwest::Client::new(),
+            launch: Launch::default(),
+            settings: Arc::default(),
+            events: broadcast::channel(1).0,
+            zoom_web: base.clone(),
+            zoom_api: base,
+            keyring: false,
+        };
+        (state, fake)
+    }
+
+    async fn body_json(res: Response) -> serde_json::Value {
+        serde_json::from_slice(&axum::body::to_bytes(res.into_body(), 1 << 20).await.unwrap()).unwrap()
+    }
+
+    #[tokio::test]
+    async fn refresh_token_is_replaced_on_every_refresh() {
+        let (s, fake) = fake_zoom(Some("r1")).await;
+        assert_eq!(access_token(&s).await.as_deref(), Some("a1"));
+        {
+            let sess = s.session.lock().await;
+            assert_eq!(sess.refresh_token.as_deref(), Some("r2"));
+            assert_eq!(sess.user_label.as_deref(), Some("Test User"));
+        }
+        // Still fresh: no second trip to Zoom.
+        assert_eq!(access_token(&s).await.as_deref(), Some("a1"));
+        assert_eq!(fake.refreshes.load(Ordering::SeqCst), 1);
+        // Under a minute left: refreshed with the new refresh token, not the used one.
+        s.session.lock().await.access_expires = now() + 30;
+        assert_eq!(access_token(&s).await.as_deref(), Some("a2"));
+        assert_eq!(s.session.lock().await.refresh_token.as_deref(), Some("r3"));
+        assert_eq!(fake.refreshes.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn concurrent_callers_share_one_refresh() {
+        let (s, fake) = fake_zoom(Some("r1")).await;
+        let (a, b, c) = tokio::join!(access_token(&s), access_token(&s), access_token(&s));
+        assert_eq!((a.as_deref(), b.as_deref(), c.as_deref()), (Some("a1"), Some("a1"), Some("a1")));
+        assert_eq!(fake.refreshes.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn refused_refresh_token_signs_out_but_a_busy_zoom_does_not() {
+        let (s, _) = fake_zoom(Some("expired")).await;
+        s.session.lock().await.user_label = Some("Old".into());
+        assert_eq!(access_token(&s).await, None);
+        {
+            let sess = s.session.lock().await;
+            assert!(sess.refresh_token.is_none() && sess.access_token.is_none() && sess.user_label.is_none());
+        }
+
+        let (s, _) = fake_zoom(Some("busy")).await;
+        assert_eq!(access_token(&s).await, None);
+        assert_eq!(s.session.lock().await.refresh_token.as_deref(), Some("busy"));
+
+        // Zoom unreachable: the refresh token stays as well.
+        let (mut s, _) = fake_zoom(Some("r1")).await;
+        s.zoom_web = "http://127.0.0.1:1".into();
+        assert_eq!(access_token(&s).await, None);
+        assert_eq!(s.session.lock().await.refresh_token.as_deref(), Some("r1"));
+    }
+
+    #[tokio::test]
+    async fn zak_and_status_follow_the_sign_in() {
+        let (s, _) = fake_zoom(None).await;
+        assert_eq!(zak(State(s.clone())).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(body_json(status(State(s)).await).await["signedIn"], false);
+
+        let (s, _) = fake_zoom(Some("r1")).await;
+        let v = body_json(zak(State(s.clone())).await).await;
+        assert_eq!(v["zak"], "zak-for-a1");
+        let v = body_json(status(State(s)).await).await;
+        assert_eq!((v["signedIn"].as_bool(), v["user"].as_str()), (Some(true), Some("Test User")));
+    }
+
+    #[tokio::test]
+    async fn sign_out_revokes_and_forgets() {
+        let (s, fake) = fake_zoom(Some("r1")).await;
+        let v = body_json(signout(State(s.clone())).await).await;
+        assert_eq!(v["revoked"], true);
+        assert_eq!(*fake.revoked.lock().await, vec!["a1".to_string()]);
+        let sess = s.session.lock().await;
+        assert!(sess.refresh_token.is_none() && sess.access_token.is_none() && sess.keyring_checked);
     }
 }

@@ -817,7 +817,9 @@ async function start() {
   // ?script=a,b,… then runs one UI action every 6 s (the same act() as a
   // click; "say:<text>" sends a chat message).
   const tq = new URLSearchParams(location.search);
-  if (l && tq.has('autojoin')) {
+  let auto = l;
+  if (!l && tq.has('autonew') && S.account.signedIn) { await newMeeting(); auto = S.screen === 'join' ? S.launch : null; } // tests: New meeting
+  if (auto && tq.has('autojoin')) {
     const tlog = (msg) => fetch('/api/log', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ level: 'test', msg: String(msg).slice(0, 2000) }) }).catch(() => {});
     setInterval(() => {
@@ -835,7 +837,10 @@ async function start() {
     addEventListener('unhandledrejection', (e) => tlog('unhandledrejection ' + (e.reason?.stack || JSON.stringify(e.reason))));
     addEventListener('error', (e) => tlog('onerror ' + e.message));
     $('joinName').value = tq.get('name') || 'Test';
-    await doJoin();
+    tlog(`join button ${$('joinBtn').textContent}`);
+    const joining = doJoin();
+    tlog(`join button ${$('joinBtn').textContent}`);
+    await joining;
     const steps = (tq.get('script') || '').split(',').filter(Boolean);
     const stepMs = +tq.get('stepms') || 6000; // ?stepms=3000: faster soak runs
     for (const step of steps) {
@@ -871,6 +876,12 @@ async function start() {
         continue;
       }
       if (step === 'reclaim-host') { zc.reclaimHost(); continue; }
+      if (step === 'aan') { // tests: Zoom's "apps accessing content" tip and our icon, and whether they show
+        const tips = [...document.querySelectorAll('[role=tooltip]')].filter((x) => /accessing your meeting content/i.test(x.textContent));
+        tlog(`aan setting=${!!S.settings.hideAppsNotice} tips=${tips.map((x) => `${x.className.includes('zc-aan-tip') ? 'tagged' : 'untagged'}:${getComputedStyle(x).display}`).join(',') || 'none'}`
+          + ` icon=${[...document.querySelectorAll('.aan')].map((x) => x.offsetParent !== null ? 'shown' : 'hidden').join(',') || 'none'}`);
+        continue;
+      }
       if (step.startsWith('click:')) { // tests: press a visible button by its text (Zoom's windows too)
         const [t, nth] = step.slice(6).split('@'); // click:Text@2 = the second such button; click:Room 2* = text starting so
         const hit = t.endsWith('*') ? (s) => s.startsWith(t.slice(0, -1)) : (s) => s === t;

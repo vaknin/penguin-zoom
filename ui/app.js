@@ -216,6 +216,7 @@ function renderPeople() {
   const ul = $('peopleList');
   const meUser = S.meet.users.find((u) => u.me) || {};
   const amHost = !!(meUser.host || meUser.cohost);
+  $('hostRow').hidden = !amHost;
   ul.replaceChildren(...S.meet.users.map((u) => {
     const li = document.createElement('li');
     const av = document.createElement('span');
@@ -299,6 +300,7 @@ function setPanel(p) {
     $('tabPeople').setAttribute('aria-selected', p === 'people');
     $('chatView').hidden = p !== 'chat';
     $('peopleList').hidden = p !== 'people';
+    $('hostRow').hidden = p !== 'people'; // renderPeople shows it to hosts
     $('inviteRow').hidden = p !== 'people' || !S.launch;
     if (S.launch) $('inviteInfo').textContent = `ID ${fmtNumber(S.launch.number)}${S.launch.pwd ? ' · passcode ' + S.launch.pwd : ''}`;
     if (p === 'chat') { S.unread = 0; setTimeout(() => $('chatInput').focus(), 0); }
@@ -659,6 +661,9 @@ function act(a, el) {
     case 'invite-later': S.inviteDismissed = S.breakout.room?.id; renderToast(); break;
     case 'invite-join': if (S.breakout.room) zc.breakoutJoin(S.breakout.room.id); break;
     case 'breakout-leave': zc.breakoutLeave(); break;
+    case 'breakout-manage':
+      if (!zc.breakoutManage()) showError('Breakout rooms are off for this meeting: turn them on in Zoom\'s web settings (Meetings › Breakout room).');
+      break;
     case 'dismiss-error': S.error = null; renderToast(); break;
     case 'test-sound': testSound(); break;
     case 'notice': toggleNotice(); break;
@@ -839,6 +844,13 @@ async function start() {
         continue;
       }
       if (step === 'reclaim-host') { zc.reclaimHost(); continue; }
+      if (step.startsWith('click:')) { // tests: press a visible button by its text (Zoom's windows too)
+        const t = step.slice(6);
+        const b = [...document.querySelectorAll('button, [role=button], label')].find((x) => x.offsetParent !== null && x.textContent.trim() === t);
+        tlog(`click ${t} -> ${b ? 'found' : 'not found'}`);
+        b?.click();
+        continue;
+      }
       if (step.startsWith('say:')) { $('chatInput').value = step.slice(4); $('chatForm').requestSubmit(); }
       else act(step, document.querySelector(`[data-action="${step}"]`));
     }

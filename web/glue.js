@@ -839,6 +839,10 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
     },
     breakoutJoin: guard('Joining the room', (id) => client.joinBreakoutRoom(id)),
     breakoutLeave: guard('Returning to the main session', () => client.leaveBreakoutRoom()),
+    // Host or co-host: Zoom's own Breakout Rooms window (create, assign, open,
+    // close, broadcast). The SDK has no public call to create rooms, so this
+    // presses Zoom's hidden toolbar button; its window shows over ours.
+    breakoutManage: () => press(/^breakout rooms$/i),
     // Zoom's Active Apps Notifier panel (required to stay reachable).
     activeApps: () => press(/see apps that are accessing/i),
     previewStart,

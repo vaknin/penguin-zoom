@@ -9,7 +9,7 @@ TEST PLAN
 1. Settings (gear or ",") > Sign in. Zoom's authorize page opens in the default browser; Allow. Settings shows "Signed in as <name> (<email>)" (user:read:user).
 2. New meeting (start screen, or "n"): creates an instant meeting (meeting:write:meeting), join screen, Join: you are host. People (p) > Copy invite link; join from another device.
 3. Join a meeting: paste a link (Ctrl+V) or click a zoommtg link. Join screen: preview, mic meter, devices. You join as yourself with a ZAK (user:read:token).
-4. In the meeting: mute (m), video (v), share (s; portal picker), chat (c), people (p), gallery/speaker (g), devices (d), breakout rooms as participant. Zoom's recording/consent notices, chat audience notice and Active Apps button stay visible.
+4. In the meeting: mute (m), video (v), share (s; portal picker), chat (c), people (p), gallery/speaker (g), devices (d), breakout rooms (host: People > Breakout rooms). Zoom's recording/consent notices, chat audience notice and Active Apps button stay visible.
 5. Leave (Ctrl+Shift+L or closing the window). As host with others present: Leave or End for all.
 6. Settings > Sign out: deletes the token from the keyring and calls Zoom's revoke endpoint (Zoom currently answers invalid_client for public clients), so the app also points to removing the app in Marketplace, which triggers our deauthorization endpoint.
 

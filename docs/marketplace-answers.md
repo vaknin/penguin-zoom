@@ -29,7 +29,7 @@ Penguin for Zoom is a small desktop app for Linux, especially Wayland desktops, 
 - Start a new meeting as host and copy its invite link.
 - Mute, camera, screen share, gallery and speaker view, chat and a participant list in a compact control bar.
 - Choose your camera, microphone and speakers.
-- Join breakout rooms when the host invites you.
+- Join breakout rooms when the host invites you; as host, run them in Zoom's own breakout window.
 - Keyboard shortcuts for mute and leave.
 
 Sign in with your own Zoom account. The app asks Zoom only for what it needs to join meetings as you and to create a meeting when you press New meeting; it does not read your meetings, contacts, recordings or chat history, and it keeps no data about you on any server.

@@ -208,6 +208,11 @@ if (window.MediaDevices?.prototype.getDisplayMedia) {
         && !el.parentElement.querySelector('video, canvas')) el = el.parentElement;
       el.classList.add('zc-collapsed');
     }
+    // The tip Zoom pops up by itself on its Active Apps icon: tagged so the
+    // "Hide the apps notice" setting can hide it (ui/style.css).
+    for (const t of document.querySelectorAll('[role=tooltip]:not(.zc-aan-tip)')) {
+      if (/accessing your meeting content/i.test(t.textContent)) t.classList.add('zc-aan-tip');
+    }
   }
   let dialogPending = false;
   new MutationObserver(() => {

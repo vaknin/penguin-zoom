@@ -25,6 +25,7 @@ const ICONS = {
   check: 'M5 12l5 5L20 7',
   swap: 'M4 8h13M13 4l4 4-4 4M20 16H7M11 12l-4 4 4 4',
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v5M12 8h.01',
+  rooms: 'M3 5h18v14H3zM12 5v14M3 12h9',
   apps: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
 };
 function setIcon(svg, name) {
@@ -45,7 +46,7 @@ document.querySelectorAll('svg[data-icon]').forEach((s) => setIcon(s, s.dataset.
 const S = {
   screen: 'idle',
   launch: null, // { number, pwd, link }
-  settings: { style: 'standard', joinMuted: true, joinCameraOff: false, hideIdle: true, name: '', speakerId: null },
+  settings: { style: 'standard', joinMuted: true, joinCameraOff: false, hideIdle: true, hideAppsNotice: false, name: '', speakerId: null },
   account: { signedIn: false, user: null, configured: false },
   joinMic: true,
   joinCam: true,
@@ -117,6 +118,7 @@ function renderJoin() {
   $('joinTitle').textContent = S.meet.topic && S.meet.joined ? S.meet.topic
     : (S.launch.host ? 'New meeting ' : 'Meeting ') + fmtNumber(S.launch.number);
   renderJoinSub();
+  if (!S.joining) $('joinBtn').textContent = joinLabel(false);
   $('joinName').value = $('joinName').value || S.settings.name || '';
   if (!$('joinName').value) $('joinName').focus(); // typing goes to the name, not to shortcuts
   renderJoinToggles();
@@ -161,7 +163,7 @@ async function doJoin(e) {
   if (name !== S.settings.name) { S.settings.name = name; putSettings(); }
   S.joining = true;
   $('joinBtn').disabled = true;
-  $('joinBtn').textContent = 'Joining…';
+  $('joinBtn').textContent = joinLabel(true);
   try {
     await zcReady; // the SDK may still be loading right after launch
     await zc.join(JSON.stringify({
@@ -176,8 +178,10 @@ async function doJoin(e) {
   } catch { /* glue already sent the error */ }
   S.joining = false;
   $('joinBtn').disabled = false;
-  $('joinBtn').textContent = 'Join';
+  $('joinBtn').textContent = joinLabel(false);
 }
+// A new meeting is created by joining it as host.
+const joinLabel = (busy) => S.launch?.host ? (busy ? 'Creating…' : 'Create') : (busy ? 'Joining…' : 'Join');
 
 // ---------- meeting ----------
 function renderMeeting() {
@@ -214,6 +218,9 @@ function renderMeeting() {
   $('kbCam').textContent = m.video ? 'cam on' : 'cam off';
   $('kbChat').textContent = S.unread ? `chat ${S.unread}` : '';
   $('tabPeople').textContent = `People · ${m.users.length}`;
+  const meUser = m.users.find((u) => u.me) || {};
+  $('btnRooms').hidden = !(meUser.host || meUser.cohost);
+  $('kbRooms').hidden = $('btnRooms').hidden;
   if (S.panel === 'people') renderPeople();
   renderToast();
 }
@@ -222,7 +229,6 @@ function renderPeople() {
   const ul = $('peopleList');
   const meUser = S.meet.users.find((u) => u.me) || {};
   const amHost = !!(meUser.host || meUser.cohost);
-  $('hostRow').hidden = !amHost;
   ul.replaceChildren(...S.meet.users.map((u) => {
     const li = document.createElement('li');
     const av = document.createElement('span');
@@ -306,7 +312,6 @@ function setPanel(p) {
     $('tabPeople').setAttribute('aria-selected', p === 'people');
     $('chatView').hidden = p !== 'chat';
     $('peopleList').hidden = p !== 'people';
-    $('hostRow').hidden = p !== 'people'; // renderPeople shows it to hosts
     $('inviteRow').hidden = p !== 'people' || !S.launch;
     if (S.launch) $('inviteInfo').textContent = `ID ${fmtNumber(S.launch.number)}${S.launch.pwd ? ' · passcode ' + S.launch.pwd : ''}`;
     if (p === 'chat') { S.unread = 0; setTimeout(() => $('chatInput').focus(), 0); }
@@ -591,7 +596,12 @@ async function copyInvite(btn) {
     if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy invite link'; }, 2000); }
   } catch { showError("Couldn't copy the invite"); }
 }
-function applyStyle() { body.dataset.style = S.settings.style === 'keyboard' ? 'keyboard' : 'standard'; requestAnimationFrame(() => zc.fit()); }
+function applyStyle() {
+  body.dataset.style = S.settings.style === 'keyboard' ? 'keyboard' : 'standard';
+  // The owner's choice, against Zoom's rule that the Active Apps Notifier stays visible.
+  body.classList.toggle('hide-aan', !!S.settings.hideAppsNotice);
+  requestAnimationFrame(() => zc.fit());
+}
 
 // ---------- events from glue / Rust ----------
 function onEvent(json) {
@@ -698,6 +708,7 @@ document.addEventListener('click', (e) => {
     S.settings[k] = !S.settings[k];
     if (k === 'joinMuted') S.joinMic = !S.settings.joinMuted;
     if (k === 'joinCameraOff') S.joinCam = !S.settings.joinCameraOff;
+    if (k === 'hideAppsNotice') applyStyle();
     renderSettings();
     putSettings();
     return;
@@ -754,6 +765,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (S.screen !== 'meeting') return;
   if (k === 's' && e.shiftKey) { e.preventDefault(); act('share-change'); return; }
+  if (k === 'b') { if (!$('btnRooms').hidden) act('breakout-manage'); return; }
   const map = { m: 'mute', v: 'video', s: 'share', c: 'chat', p: 'people', g: 'layout' };
   if (map[k]) { e.preventDefault(); act(map[k]); }
 });
@@ -912,11 +924,11 @@ async function start() {
         msg: `name field value=${JSON.stringify(f.value)} keys=${keys.join(' ')} active=${document.activeElement?.id || document.activeElement?.tagName}` }) }), 6000);
     }, 4000);
   }
-  // Off-screen layout checks (tests only, with ?nomedia): ?show=meeting|waiting|sharing|chat|devices|invite|room|settings
+  // Off-screen layout checks (tests only, with ?nomedia): ?show=meeting|waiting|sharing|chat|devices|invite|room|settings; &ashost = we are host
   const show = NO_MEDIA && new URLSearchParams(location.search).get('show');
   if (show) {
     S.meet = { joined: show !== 'waiting', topic: 'Layout check', muted: true, video: false, sharing: show === 'sharing',
-      users: [{ id: 1, name: 'You', me: true, muted: true }, { id: 2, name: 'Host', host: true }] };
+      users: [{ id: 1, name: 'You', me: true, muted: true, host: tq.has('ashost') }, { id: 2, name: 'Host', host: !tq.has('ashost') }] };
     window.__zcShare.live = show === 'sharing'; // glue's snapshots read this
     S.layoutCheck = true;
     if (show !== 'settings') go('meeting');

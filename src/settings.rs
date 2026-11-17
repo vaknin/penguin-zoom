@@ -22,6 +22,8 @@ pub struct Settings {
     pub join_muted: bool,
     pub join_camera_off: bool,
     pub hide_idle: bool,
+    /// Hide Zoom's Active Apps Notifier (owner's choice; Zoom requires it shown).
+    pub hide_apps_notice: bool,
     pub name: String,
     /// PulseAudio sink name to route our playback to; None = system default.
     pub speaker_id: Option<String>,
@@ -43,6 +45,7 @@ impl Default for Settings {
             join_muted: true,
             join_camera_off: false,
             hide_idle: true,
+            hide_apps_notice: false,
             name: String::new(),
             speaker_id: None,
             camera: None,
@@ -121,7 +124,7 @@ mod tests {
         assert_eq!(
             v,
             serde_json::json!({"style":"standard","joinMuted":true,"joinCameraOff":false,
-                "hideIdle":true,"name":"","speakerId":null,
+                "hideIdle":true,"hideAppsNotice":false,"name":"","speakerId":null,
                 "camera":null,"mic":null,"cameraId":null,"micId":null})
         );
     }

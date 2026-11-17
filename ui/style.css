@@ -228,7 +228,8 @@ body.idle-hide .aan { opacity: .35; }
 body.panel-open .gear { right: 384px; }
 body[data-style="keyboard"] .gear { top: 40px; border-radius: 4px; }
 body.idle-hide .gear { opacity: .35; }
-body.in-waiting .gear { display: none; }
+body.in-waiting .gear, body[data-screen="meeting"] .gear { display: none; }
+body.hide-aan .aan, body.hide-aan .zc-aan-tip { display: none; }
 .people .rename { flex: 1; min-width: 0; display: flex; gap: 6px; }
 .people .rename input { flex: 1; min-width: 0; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; font: inherit; }
 .people .link.small { font-size: 12px; }
